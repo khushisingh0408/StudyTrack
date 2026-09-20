@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { Modal } from "../components/Modal";
+import confetti from "canvas-confetti";
 import {
   BarChart3,
   Calendar,
@@ -11,6 +15,11 @@ import {
   Star,
   Sparkles,
   BookOpen,
+  Plus,
+  Play,
+  CheckCircle,
+  FileText,
+  Zap,
 } from "lucide-react";
 import {
   Chart as ChartJS,
@@ -42,14 +51,43 @@ ChartJS.register(
 );
 
 export const Analytics = () => {
+  const navigate = useNavigate();
+  const { refreshUserStats } = useAuth();
   const [period, setPeriod] = useState("week"); // 'week' | 'month' | 'year'
   const [timeseriesData, setTimeseriesData] = useState(null);
   const [subjectBreakdown, setSubjectBreakdown] = useState([]);
   const [expandedSubjectId, setExpandedSubjectId] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Manual Time Entry Modal State
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [customSubjectName, setCustomSubjectName] = useState("");
+  const [isCustomSubject, setIsCustomSubject] = useState(false);
+
+  const [topics, setTopics] = useState([]);
+  const [selectedTopicId, setSelectedTopicId] = useState("");
+  const [customTopicName, setCustomTopicName] = useState("");
+  const [isCustomTopic, setIsCustomTopic] = useState(false);
+
+  const [subTopics, setSubTopics] = useState([]);
+  const [selectedSubTopicId, setSelectedSubTopicId] = useState("");
+  const [customSubTopicName, setCustomSubTopicName] = useState("");
+  const [isCustomSubTopic, setIsCustomSubTopic] = useState(false);
+
+  const [manualDate, setManualDate] = useState(new Date().toISOString().split("T")[0]);
+  const [manualHours, setManualHours] = useState(1);
+  const [manualMinutes, setManualMinutes] = useState(0);
+  const [manualProductivity, setManualProductivity] = useState(5);
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualMarkCompleted, setManualMarkCompleted] = useState(true);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualSuccessMsg, setManualSuccessMsg] = useState("");
+
   useEffect(() => {
     fetchAnalytics();
+    loadSubjects();
   }, [period]);
 
   const fetchAnalytics = async () => {
@@ -66,6 +104,120 @@ export const Analytics = () => {
       console.error("Error loading analytics:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSubjects = async () => {
+    try {
+      const res = await api.getSubjects();
+      if (res.success && res.subjects.length > 0) {
+        setSubjects(res.subjects);
+        if (!selectedSubjectId) {
+          setSelectedSubjectId(res.subjects[0]._id || res.subjects[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading subjects in analytics:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedSubjectId || isCustomSubject) {
+      setTopics([]);
+      setSelectedTopicId("");
+      return;
+    }
+    const loadTopics = async () => {
+      try {
+        const res = await api.getTopics(selectedSubjectId);
+        if (res.success) {
+          setTopics(res.topics || []);
+          setSelectedTopicId("");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadTopics();
+  }, [selectedSubjectId, isCustomSubject]);
+
+  useEffect(() => {
+    if (!selectedTopicId || isCustomTopic) {
+      setSubTopics([]);
+      setSelectedSubTopicId("");
+      return;
+    }
+    const loadSubTopics = async () => {
+      try {
+        const res = await api.getSubTopics(selectedTopicId, selectedSubjectId);
+        if (res.success) {
+          setSubTopics(res.subTopics || []);
+          setSelectedSubTopicId("");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadSubTopics();
+  }, [selectedTopicId, selectedSubjectId, isCustomTopic]);
+
+  const handleSaveManualTime = async (e) => {
+    e.preventDefault();
+    const totalMinutes = Number(manualHours) * 60 + Number(manualMinutes);
+
+    if (totalMinutes <= 0) {
+      alert("Please enter a valid study duration greater than 0 minutes.");
+      return;
+    }
+
+    const finalSubjectName = isCustomSubject ? customSubjectName.trim() : null;
+    const finalSubjectId = !isCustomSubject ? selectedSubjectId : null;
+
+    if (!finalSubjectId && !finalSubjectName) {
+      alert("Please select or type a Subject name");
+      return;
+    }
+
+    const finalTopicName = isCustomTopic ? customTopicName.trim() : null;
+    const finalTopicId = !isCustomTopic && selectedTopicId ? selectedTopicId : null;
+
+    const finalSubTopicName = isCustomSubTopic ? customSubTopicName.trim() : null;
+    const finalSubTopicId = !isCustomSubTopic && selectedSubTopicId ? selectedSubTopicId : null;
+
+    setManualSaving(true);
+    try {
+      const res = await api.createSession({
+        subjectId: finalSubjectId,
+        subjectName: finalSubjectName,
+        topicId: finalTopicId,
+        topicName: finalTopicName,
+        subTopicId: finalSubTopicId,
+        subTopicName: finalSubTopicName,
+        sessionType: "direct",
+        durationMinutes: totalMinutes,
+        date: new Date(manualDate),
+        productivityRating: manualProductivity,
+        notes: manualNotes,
+        markSubTopicCompleted: manualMarkCompleted && (!!finalSubTopicId || !!finalSubTopicName),
+      });
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+
+      setIsManualModalOpen(false);
+      setManualNotes("");
+      setManualSuccessMsg(res.message || `Added ${totalMinutes} mins study time to Analytics! 🔥`);
+      await fetchAnalytics();
+      await loadSubjects();
+      refreshUserStats();
+      setTimeout(() => setManualSuccessMsg(""), 4500);
+    } catch (err) {
+      alert(err.message || "Failed to save study time");
+    } finally {
+      setManualSaving(false);
     }
   };
 
@@ -220,14 +372,14 @@ export const Analytics = () => {
 
   return (
     <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Top Header & Period Selector (Week / Month / Year) */}
+      {/* Top Header & Action Controls */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", margin: "0 0 4px 0" }}>
-            Performance <span className="gradient-text">& Analytics</span>
+            Performance <span className="gradient-text">& Study Analytics</span>
           </h1>
           <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-            Analyze deep study trends across <strong>Week</strong>, <strong>Month</strong>, and <strong>Year</strong>.
+            Deep study analytics across <strong>Week</strong>, <strong>Month</strong>, and <strong>Year</strong>. Padhai ka time yahan add aur analyze karein.
           </p>
         </div>
 
@@ -265,12 +417,59 @@ export const Analytics = () => {
             </button>
           </div>
 
+          {/* "+ Log Study Time" Direct Button */}
+          <button
+            onClick={() => setIsManualModalOpen(true)}
+            className="btn-primary"
+            style={{
+              padding: "8px 16px",
+              fontSize: "0.875rem",
+              background: "linear-gradient(135deg, #10b981, #059669)",
+              boxShadow: "0 0 16px rgba(16, 185, 129, 0.4)",
+            }}
+            title="Add Past or Offline Study Time Directly"
+          >
+            <Plus size={16} />
+            <span>+ Log Study Time</span>
+          </button>
+
+          <button
+            onClick={() => navigate("/session?mode=timer")}
+            className="btn-secondary"
+            style={{ padding: "8px 14px", fontSize: "0.875rem" }}
+            title="Start Live Timer / Stopwatch"
+          >
+            <Play size={15} fill="currentColor" />
+            <span>Live Timer</span>
+          </button>
+
           <button onClick={handleExportCSV} className="btn-secondary" style={{ padding: "8px 14px" }} title="Export CSV Report">
             <Download size={16} />
             <span>Export CSV</span>
           </button>
         </div>
       </div>
+
+      {/* Success Notification Banner */}
+      {manualSuccessMsg && (
+        <div
+          className="animate-fade-in"
+          style={{
+            padding: "14px 18px",
+            background: "rgba(16, 185, 129, 0.15)",
+            border: "1px solid rgba(16, 185, 129, 0.35)",
+            borderRadius: "var(--radius-md)",
+            color: "#6ee7b7",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontWeight: 600,
+          }}
+        >
+          <Sparkles size={18} />
+          <span>{manualSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Summary KPI Banner */}
       <div className="grid-cols-4">
@@ -385,10 +584,22 @@ export const Analytics = () => {
 
       {/* Subject Detailed Breakdown Table */}
       <div className="glass-panel" style={{ padding: "24px" }}>
-        <h3 style={{ fontSize: "1.15rem", margin: "0 0 4px 0" }}>Subject Mastery & Curriculum Overview</h3>
-        <p style={{ fontSize: "0.813rem", color: "var(--text-muted)", marginBottom: "18px" }}>
-          Cumulative progress, sub-topic completion rates, and target hours comparison.
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
+          <div>
+            <h3 style={{ fontSize: "1.15rem", margin: "0 0 4px 0" }}>Subject Mastery & Curriculum Overview</h3>
+            <p style={{ fontSize: "0.813rem", color: "var(--text-muted)", margin: 0 }}>
+              Cumulative progress, sub-topic completion rates, and target hours comparison.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsManualModalOpen(true)}
+            className="btn-ghost"
+            style={{ fontSize: "0.85rem", color: "var(--accent-primary)" }}
+          >
+            <Plus size={15} />
+            <span>+ Add Time for Subject</span>
+          </button>
+        </div>
 
         {subjectBreakdown.length === 0 ? (
           <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.875rem" }}>
@@ -562,6 +773,290 @@ export const Analytics = () => {
           </div>
         )}
       </div>
+
+      {/* --- Modal: Manual Study Time Logger --- */}
+      <Modal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        title="📝 Log Past / Offline Study Time"
+        maxWidth="600px"
+      >
+        <form onSubmit={handleSaveManualTime}>
+          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "20px" }}>
+            Padhai ka time manually enter karein — yeh record turant aapke Analytics charts, totals aur streak me jud jayega.
+          </p>
+
+          {/* Subject Hierarchy */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "18px" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label className="form-label" style={{ fontWeight: 600, margin: 0 }}>
+                  1. Subject <span style={{ color: "#f43f5e" }}>*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomSubject(!isCustomSubject);
+                    setSelectedTopicId("");
+                    setSelectedSubTopicId("");
+                  }}
+                  className="btn-ghost"
+                  style={{ fontSize: "0.75rem", padding: "0 4px", color: "var(--accent-primary)" }}
+                >
+                  {isCustomSubject ? "← Choose Existing" : "+ Type New Subject"}
+                </button>
+              </div>
+
+              {isCustomSubject ? (
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Type Subject Name (e.g. Maths, Biology)"
+                  value={customSubjectName}
+                  onChange={(e) => setCustomSubjectName(e.target.value)}
+                  autoFocus
+                />
+              ) : (
+                <select
+                  className="form-select"
+                  value={selectedSubjectId}
+                  onChange={(e) => setSelectedSubjectId(e.target.value)}
+                >
+                  {subjects.length === 0 && <option value="">No subjects (Click '+ Type New Subject')</option>}
+                  {subjects.map((s) => (
+                    <option key={s._id || s.id} value={s._id || s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* Optional Topic */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <label className="form-label" style={{ margin: 0, fontSize: "0.8rem" }}>
+                    2. Topic <span style={{ color: "var(--text-muted)" }}>(Optional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomTopic(!isCustomTopic)}
+                    className="btn-ghost"
+                    style={{ fontSize: "0.7rem", padding: "0 4px", color: "var(--accent-primary)" }}
+                  >
+                    {isCustomTopic ? "← Existing" : "+ New"}
+                  </button>
+                </div>
+
+                {isCustomTopic ? (
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Topic name"
+                    value={customTopicName}
+                    onChange={(e) => setCustomTopicName(e.target.value)}
+                  />
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedTopicId}
+                    onChange={(e) => setSelectedTopicId(e.target.value)}
+                    disabled={topics.length === 0}
+                  >
+                    <option value="">No specific topic</option>
+                    {topics.map((t) => (
+                      <option key={t._id || t.id} value={t._id || t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Optional SubTopic */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <label className="form-label" style={{ margin: 0, fontSize: "0.8rem" }}>
+                    3. Sub-Topic <span style={{ color: "var(--text-muted)" }}>(Optional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomSubTopic(!isCustomSubTopic)}
+                    className="btn-ghost"
+                    style={{ fontSize: "0.7rem", padding: "0 4px", color: "var(--accent-primary)" }}
+                  >
+                    {isCustomSubTopic ? "← Existing" : "+ New"}
+                  </button>
+                </div>
+
+                {isCustomSubTopic ? (
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Sub-topic name"
+                    value={customSubTopicName}
+                    onChange={(e) => setCustomSubTopicName(e.target.value)}
+                  />
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedSubTopicId}
+                    onChange={(e) => setSelectedSubTopicId(e.target.value)}
+                    disabled={subTopics.length === 0}
+                  >
+                    <option value="">No specific sub-topic</option>
+                    {subTopics.map((st) => (
+                      <option key={st._id || st.id} value={st._id || st.id}>
+                        {st.title} {st.status === "completed" ? "✓" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Date & Duration */}
+          <div className="grid-cols-2" style={{ marginBottom: "16px" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Study Date</label>
+              <input
+                type="date"
+                className="form-input"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Study Duration</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ flex: 1 }}>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="Hours"
+                    min="0"
+                    max="24"
+                    value={manualHours}
+                    onChange={(e) => setManualHours(e.target.value)}
+                  />
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Hours</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="Minutes"
+                    min="0"
+                    max="59"
+                    step="5"
+                    value={manualMinutes}
+                    onChange={(e) => setManualMinutes(e.target.value)}
+                  />
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Minutes</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick preset chips */}
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
+            {[
+              { label: "15m", h: 0, m: 15 },
+              { label: "30m", h: 0, m: 30 },
+              { label: "45m", h: 0, m: 45 },
+              { label: "1 Hour", h: 1, m: 0 },
+              { label: "1.5 Hrs", h: 1, m: 30 },
+              { label: "2 Hours", h: 2, m: 0 },
+              { label: "3 Hours", h: 3, m: 0 },
+              { label: "4 Hours", h: 4, m: 0 },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => {
+                  setManualHours(preset.h);
+                  setManualMinutes(preset.m);
+                }}
+                className="btn-ghost"
+                style={{
+                  padding: "3px 8px",
+                  fontSize: "0.75rem",
+                  background: manualHours === preset.h && manualMinutes === preset.m ? "rgba(99, 102, 241, 0.25)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${manualHours === preset.h && manualMinutes === preset.m ? "rgba(99, 102, 241, 0.5)" : "var(--border-subtle)"}`,
+                  borderRadius: "var(--radius-sm)",
+                  color: manualHours === preset.h && manualMinutes === preset.m ? "#a5b4fc" : "var(--text-secondary)",
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Star Focus Rating */}
+          <div className="form-group" style={{ marginBottom: "16px" }}>
+            <label className="form-label">Focus & Productivity Rating (1 - 5 Stars)</label>
+            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setManualProductivity(star)}
+                  className="btn-ghost"
+                  style={{
+                    padding: "6px 10px",
+                    color: manualProductivity >= star ? "#fbbf24" : "var(--text-muted)",
+                    background: manualProductivity >= star ? "rgba(245, 158, 11, 0.12)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${manualProductivity >= star ? "rgba(245, 158, 11, 0.3)" : "var(--border-subtle)"}`,
+                    borderRadius: "var(--radius-md)",
+                  }}
+                >
+                  <Star size={16} fill={manualProductivity >= star ? "currentColor" : "none"} />
+                  <span style={{ marginLeft: "4px", fontWeight: 600 }}>{star}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="form-group" style={{ marginBottom: "16px" }}>
+            <label className="form-label">Study Notes & Key Insights</label>
+            <textarea
+              className="form-textarea"
+              rows={2}
+              placeholder="What topics or formulas did you cover?"
+              value={manualNotes}
+              onChange={(e) => setManualNotes(e.target.value)}
+            />
+          </div>
+
+          {(selectedSubTopicId || customSubTopicName) && (
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", marginBottom: "20px" }}>
+              <input
+                type="checkbox"
+                checked={manualMarkCompleted}
+                onChange={(e) => setManualMarkCompleted(e.target.checked)}
+                style={{ width: "16px", height: "16px", accentColor: "var(--accent-primary)" }}
+              />
+              <span style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
+                Mark sub-topic as <strong>Completed</strong>
+              </span>
+            </label>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <button type="button" className="btn-secondary" onClick={() => setIsManualModalOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={manualSaving}>
+              {manualSaving ? "Saving..." : "Save to Analytics"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

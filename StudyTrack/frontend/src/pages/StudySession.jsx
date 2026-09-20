@@ -25,6 +25,8 @@ import {
   Zap,
   Layers,
   HelpCircle,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
 
 export const StudySession = () => {
@@ -54,8 +56,10 @@ export const StudySession = () => {
   const [isAmbiencePlaying, setIsAmbiencePlaying] = useState(false);
 
   // --- Timer Mode State ---
-  const [timerType, setTimerType] = useState("pomodoro"); // 'pomodoro' | 'short_break' | 'long_break' | 'stopwatch'
+  // timerType: 'stopwatch' | 'pomodoro' | 'focus45' | 'deep60' | 'marathon90' | 'custom' | 'short_break' | 'long_break'
+  const [timerType, setTimerType] = useState("stopwatch");
   const [customMinutes, setCustomMinutes] = useState(25);
+  const [customInputVal, setCustomInputVal] = useState("30");
   const [secondsLeft, setSecondsLeft] = useState(25 * 60);
   const [totalTimerSeconds, setTotalTimerSeconds] = useState(25 * 60);
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
@@ -89,7 +93,9 @@ export const StudySession = () => {
       const res = await api.getSubjects();
       if (res.success && res.subjects.length > 0) {
         setSubjects(res.subjects);
-        setSelectedSubjectId(res.subjects[0]._id || res.subjects[0].id);
+        if (!selectedSubjectId) {
+          setSelectedSubjectId(res.subjects[0]._id || res.subjects[0].id);
+        }
       } else {
         setIsCustomSubject(true);
       }
@@ -171,9 +177,18 @@ export const StudySession = () => {
     if (type === "stopwatch") {
       setStopwatchSeconds(0);
     } else {
-      setCustomMinutes(minutes);
-      setSecondsLeft(minutes * 60);
-      setTotalTimerSeconds(minutes * 60);
+      const validMins = Math.max(1, Number(minutes) || 25);
+      setCustomMinutes(validMins);
+      setSecondsLeft(validMins * 60);
+      setTotalTimerSeconds(validMins * 60);
+    }
+  };
+
+  const handleCustomMinutesChange = (val) => {
+    setCustomInputVal(val);
+    const num = parseInt(val, 10);
+    if (num && num > 0) {
+      switchTimerMode("custom", num);
     }
   };
 
@@ -259,7 +274,7 @@ export const StudySession = () => {
       setTimerNotes("");
       await fetchSubjectsData();
       refreshUserStats();
-      setSaveSuccessMsg(res.message || `Saved ${elapsedMinutes} mins study session!`);
+      setSaveSuccessMsg(res.message || `Saved ${elapsedMinutes} mins study session to Analytics! 🔥`);
       setTimeout(() => setSaveSuccessMsg(""), 4500);
     } catch (err) {
       alert(err.message || "Failed to save study session");
@@ -313,7 +328,7 @@ export const StudySession = () => {
         origin: { y: 0.6 },
       });
 
-      setSaveSuccessMsg(res.message || `Logged ${totalMinutes} mins study data! Streak updated 🔥`);
+      setSaveSuccessMsg(res.message || `Logged ${totalMinutes} mins study data! Analytics & streak updated 🔥`);
       setDirectNotes("");
       await fetchSubjectsData();
       refreshUserStats();
@@ -361,44 +376,56 @@ export const StudySession = () => {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", margin: "0 0 4px 0" }}>
-            Study <span className="gradient-text">Time & Performance Logger</span>
+            Study <span className="gradient-text">Time Tracker & Performance Logger</span>
           </h1>
           <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-            Log study duration for any <strong>Subject</strong>, with optional <strong>Topic</strong> or <strong>Sub-Topic</strong> detail.
+            Padhai ka live time count karein (Stopwatch/Timer) ya pehle padha hua time manually add karein.
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div
-          style={{
-            display: "flex",
-            background: "rgba(255,255,255,0.05)",
-            padding: "4px",
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
-          <button
-            onClick={() => {
-              setActiveTab("timer");
-              setSearchParams({ mode: "timer" });
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              background: "rgba(255,255,255,0.05)",
+              padding: "4px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-subtle)",
             }}
-            className={activeTab === "timer" ? "btn-primary" : "btn-ghost"}
-            style={{ padding: "8px 18px", borderRadius: "var(--radius-sm)" }}
           >
-            <TimerIcon size={16} />
-            <span>Interactive Timer</span>
-          </button>
+            <button
+              onClick={() => {
+                setActiveTab("timer");
+                setSearchParams({ mode: "timer" });
+              }}
+              className={activeTab === "timer" ? "btn-primary" : "btn-ghost"}
+              style={{ padding: "8px 18px", borderRadius: "var(--radius-sm)" }}
+            >
+              <TimerIcon size={16} />
+              <span>⏱️ Live Timer / Stopwatch</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("direct");
+                setSearchParams({ mode: "direct" });
+              }}
+              className={activeTab === "direct" ? "btn-primary" : "btn-ghost"}
+              style={{ padding: "8px 18px", borderRadius: "var(--radius-sm)" }}
+            >
+              <Clock size={16} />
+              <span>📝 Direct Manual Entry</span>
+            </button>
+          </div>
+
           <button
-            onClick={() => {
-              setActiveTab("direct");
-              setSearchParams({ mode: "direct" });
-            }}
-            className={activeTab === "direct" ? "btn-primary" : "btn-ghost"}
-            style={{ padding: "8px 18px", borderRadius: "var(--radius-sm)" }}
+            onClick={() => navigate("/analytics")}
+            className="btn-secondary"
+            style={{ padding: "8px 14px", fontSize: "0.85rem" }}
+            title="View Analytics"
           >
-            <Clock size={16} />
-            <span>Direct Time Entry</span>
+            <BarChart3 size={16} />
+            <span>View Analytics</span>
           </button>
         </div>
       </div>
@@ -436,7 +463,7 @@ export const StudySession = () => {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              🎯 Study Hierarchy (Choose your level of tracking detail)
+              🎯 Target Subject & Topic
             </span>
             <span
               className="badge badge-indigo"
@@ -450,11 +477,11 @@ export const StudySession = () => {
             </span>
           </div>
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-            ✨ Topic & Sub-Topic are 100% optional. Fill what you like!
+            ✨ Topic & Sub-Topic optional hain. Aap direct subject me bhi time save kar sakte hain!
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
           {/* 1. Subject (Required - Select or Type) */}
           <div className="form-group" style={{ margin: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
@@ -471,7 +498,7 @@ export const StudySession = () => {
                 className="btn-ghost"
                 style={{ fontSize: "0.75rem", padding: "0 4px", color: "var(--accent-primary)" }}
               >
-                {isCustomSubject ? "← Choose Existing" : "+ Type New"}
+                {isCustomSubject ? "← Choose Existing" : "+ Type New Subject"}
               </button>
             </div>
 
@@ -479,7 +506,7 @@ export const StudySession = () => {
               <input
                 type="text"
                 className="form-input"
-                placeholder="Type Subject Name (e.g. Maths, Pathology, DSA)"
+                placeholder="Type Subject Name (e.g. Maths, Physics, DSA)"
                 value={customSubjectName}
                 onChange={(e) => setCustomSubjectName(e.target.value)}
                 autoFocus
@@ -490,7 +517,7 @@ export const StudySession = () => {
                 value={selectedSubjectId}
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
               >
-                {subjects.length === 0 && <option value="">No subjects (Click '+ Type New')</option>}
+                {subjects.length === 0 && <option value="">No subjects (Click '+ Type New Subject')</option>}
                 {subjects.map((s) => (
                   <option key={s._id || s.id} value={s._id || s.id}>
                     {s.name}
@@ -512,7 +539,7 @@ export const StudySession = () => {
                 className="btn-ghost"
                 style={{ fontSize: "0.75rem", padding: "0 4px", color: "var(--accent-primary)" }}
               >
-                {isCustomTopic ? "← Choose Existing" : "+ Type New"}
+                {isCustomTopic ? "← Choose Existing" : "+ Type New Topic"}
               </button>
             </div>
 
@@ -520,7 +547,7 @@ export const StudySession = () => {
               <input
                 type="text"
                 className="form-input"
-                placeholder="Type Topic (e.g. Calculus, Cranial Nerves)"
+                placeholder="Type Topic (e.g. Calculus, Organic Chemistry)"
                 value={customTopicName}
                 onChange={(e) => setCustomTopicName(e.target.value)}
               />
@@ -553,7 +580,7 @@ export const StudySession = () => {
                 className="btn-ghost"
                 style={{ fontSize: "0.75rem", padding: "0 4px", color: "var(--accent-primary)" }}
               >
-                {isCustomSubTopic ? "← Choose Existing" : "+ Type New"}
+                {isCustomSubTopic ? "← Choose Existing" : "+ Type New Subtopic"}
               </button>
             </div>
 
@@ -584,14 +611,14 @@ export const StudySession = () => {
         </div>
       </div>
 
-      {/* --- Tab 1: Interactive Timer --- */}
+      {/* --- Tab 1: Interactive Timer / Stopwatch --- */}
       {activeTab === "timer" && (
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "24px" }}>
           {/* Left: Timer Circle & Controls */}
           <div
             className="glass-panel"
             style={{
-              padding: "40px 24px",
+              padding: "36px 24px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -599,7 +626,15 @@ export const StudySession = () => {
             }}
           >
             {/* Timer Preset Mode Buttons & Ambient Noise Toggle */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "28px", flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
+              <button
+                onClick={() => switchTimerMode("stopwatch", 0)}
+                className={timerType === "stopwatch" ? "btn-primary" : "btn-secondary"}
+                style={{ padding: "8px 14px", fontSize: "0.85rem", fontWeight: 700 }}
+              >
+                <Clock size={15} />
+                <span>⏱️ Live Stopwatch (Count Up)</span>
+              </button>
               <button
                 onClick={() => switchTimerMode("pomodoro", 25)}
                 className={timerType === "pomodoro" ? "btn-primary" : "btn-secondary"}
@@ -607,6 +642,30 @@ export const StudySession = () => {
               >
                 <Flame size={15} />
                 <span>Pomodoro (25m)</span>
+              </button>
+              <button
+                onClick={() => switchTimerMode("focus45", 45)}
+                className={timerType === "focus45" ? "btn-primary" : "btn-secondary"}
+                style={{ padding: "8px 14px", fontSize: "0.85rem" }}
+              >
+                <Zap size={15} />
+                <span>Focus (45m)</span>
+              </button>
+              <button
+                onClick={() => switchTimerMode("deep60", 60)}
+                className={timerType === "deep60" ? "btn-primary" : "btn-secondary"}
+                style={{ padding: "8px 14px", fontSize: "0.85rem" }}
+              >
+                <Sparkles size={15} />
+                <span>Deep Work (60m)</span>
+              </button>
+              <button
+                onClick={() => switchTimerMode("marathon90", 90)}
+                className={timerType === "marathon90" ? "btn-primary" : "btn-secondary"}
+                style={{ padding: "8px 14px", fontSize: "0.85rem" }}
+              >
+                <TrendingUp size={15} />
+                <span>Marathon (90m)</span>
               </button>
               <button
                 onClick={() => switchTimerMode("short_break", 5)}
@@ -617,23 +676,6 @@ export const StudySession = () => {
                 <span>Break (5m)</span>
               </button>
               <button
-                onClick={() => switchTimerMode("long_break", 15)}
-                className={timerType === "long_break" ? "btn-primary" : "btn-secondary"}
-                style={{ padding: "8px 14px", fontSize: "0.85rem" }}
-              >
-                <Coffee size={15} />
-                <span>Break (15m)</span>
-              </button>
-              <button
-                onClick={() => switchTimerMode("stopwatch", 0)}
-                className={timerType === "stopwatch" ? "btn-primary" : "btn-secondary"}
-                style={{ padding: "8px 14px", fontSize: "0.85rem" }}
-              >
-                <Clock size={15} />
-                <span>Stopwatch</span>
-              </button>
-
-              <button
                 onClick={handleToggleAmbienceSound}
                 className={isAmbiencePlaying ? "btn-primary" : "btn-secondary"}
                 style={{ padding: "8px 14px", fontSize: "0.85rem" }}
@@ -642,6 +684,73 @@ export const StudySession = () => {
                 {isAmbiencePlaying ? <Volume2 size={15} /> : <VolumeX size={15} />}
                 <span>{isAmbiencePlaying ? "Rain Focus ON" : "Rain Sound"}</span>
               </button>
+            </div>
+
+            {/* Custom Minutes Input for Countdown */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "24px",
+                padding: "6px 14px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-full)",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span style={{ color: "var(--text-secondary)" }}>Custom Timer:</span>
+              <input
+                type="number"
+                min="1"
+                max="360"
+                value={customInputVal}
+                onChange={(e) => handleCustomMinutesChange(e.target.value)}
+                style={{
+                  width: "55px",
+                  padding: "3px 6px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "rgba(0,0,0,0.4)",
+                  border: "1px solid var(--border-subtle)",
+                  color: "#fff",
+                  textAlign: "center",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                }}
+              />
+              <span style={{ color: "var(--text-muted)" }}>minutes</span>
+              <button
+                type="button"
+                onClick={() => switchTimerMode("custom", parseInt(customInputVal, 10) || 30)}
+                className={timerType === "custom" ? "btn-primary" : "btn-ghost"}
+                style={{ padding: "3px 10px", fontSize: "0.78rem" }}
+              >
+                Set
+              </button>
+            </div>
+
+            {/* Mode Explanation Pill */}
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "6px 14px",
+                borderRadius: "var(--radius-full)",
+                background: timerType === "stopwatch" ? "rgba(99, 102, 241, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                border: `1px solid ${timerType === "stopwatch" ? "rgba(99, 102, 241, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                fontSize: "0.813rem",
+                color: timerType === "stopwatch" ? "#a5b4fc" : "#fde68a",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Sparkles size={14} />
+              <span>
+                {timerType === "stopwatch"
+                  ? "⏱️ Stopwatch Active: Padhai shuru karein — jitna der padhenge, time count hota rahega."
+                  : `⏳ Countdown Active: ${customMinutes} mins target focus timer.`}
+              </span>
             </div>
 
             {/* Circular Timer Display */}
@@ -678,6 +787,20 @@ export const StudySession = () => {
                     style={{ transition: "stroke-dashoffset 0.5s ease" }}
                   />
                 )}
+                {timerType === "stopwatch" && isRunning && (
+                  <circle
+                    cx="140"
+                    cy="140"
+                    r="128"
+                    stroke="#818cf8"
+                    strokeWidth="8"
+                    fill="transparent"
+                    strokeDasharray={2 * Math.PI * 128}
+                    strokeDashoffset={(2 * Math.PI * 128 * (1 - (stopwatchSeconds % 60) / 60))}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 0.3s ease" }}
+                  />
+                )}
               </svg>
 
               <div style={{ zIndex: 2 }}>
@@ -694,7 +817,9 @@ export const StudySession = () => {
                 </div>
                 <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "4px" }}>
                   {timerType === "stopwatch"
-                    ? "Continuous Study"
+                    ? isRunning
+                      ? "Studying... (Live Count)"
+                      : "Stopwatch Ready"
                     : isRunning
                     ? "Focus Session in Progress"
                     : "Ready to Focus"}
@@ -703,7 +828,7 @@ export const StudySession = () => {
             </div>
 
             {/* Timer Action Controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", justifyContent: "center" }}>
               <button
                 onClick={handleToggleTimer}
                 className="btn-primary"
@@ -741,11 +866,12 @@ export const StudySession = () => {
                   background: "rgba(16, 185, 129, 0.15)",
                   color: "#6ee7b7",
                   borderColor: "rgba(16, 185, 129, 0.3)",
+                  fontWeight: 600,
                 }}
-                title="Save Completed Time"
+                title="Save Completed Time to Analytics"
               >
                 <CheckCircle size={18} />
-                <span>Finish & Save</span>
+                <span>Finish & Save to Analytics</span>
               </button>
             </div>
           </div>
@@ -791,12 +917,12 @@ export const StudySession = () => {
             <div className="glass-panel" style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                 <FileText size={18} style={{ color: "var(--accent-primary)" }} />
-                <h3 style={{ fontSize: "1.05rem", margin: 0 }}>Active Study Reflections</h3>
+                <h3 style={{ fontSize: "1.05rem", margin: 0 }}>Active Study Reflections & Key Takeaways</h3>
               </div>
               <textarea
                 className="form-textarea"
                 style={{ flex: 1, minHeight: "140px", resize: "none" }}
-                placeholder="Type your study reflections, doubts or key insights here..."
+                placeholder="Type your study reflections, formulas, doubts or key insights here while studying..."
                 value={timerNotes}
                 onChange={(e) => setTimerNotes(e.target.value)}
               />
@@ -807,11 +933,14 @@ export const StudySession = () => {
 
       {/* --- Tab 2: Direct Time Entry Mode --- */}
       {activeTab === "direct" && (
-        <div className="glass-panel" style={{ padding: "32px", maxWidth: "700px", margin: "0 auto", width: "100%" }}>
+        <div className="glass-panel" style={{ padding: "32px", maxWidth: "720px", margin: "0 auto", width: "100%" }}>
           <form onSubmit={handleSaveDirectData}>
-            <h3 style={{ fontSize: "1.3rem", margin: "0 0 6px 0" }}>Direct Study Time Logger</h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <h3 style={{ fontSize: "1.3rem", margin: 0 }}>Direct Study Time Logger</h3>
+              <span className="badge badge-amber" style={{ fontSize: "0.75rem" }}>Manual Entry</span>
+            </div>
             <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "24px" }}>
-              Log past study time directly (e.g., 1 Hour for Maths, 45 mins for Chemistry).
+              Offline ya pehle padha hua time yahan daalein (e.g. 2 Hours for Maths, 45 mins for Chemistry). Yeh turant aapke Analytics aur Streak me save ho jayega.
             </p>
 
             <div className="grid-cols-2">
@@ -859,12 +988,14 @@ export const StudySession = () => {
                 {/* Quick Preset Buttons */}
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {[
+                    { label: "15m", h: 0, m: 15 },
                     { label: "30m", h: 0, m: 30 },
                     { label: "45m", h: 0, m: 45 },
                     { label: "1 Hour", h: 1, m: 0 },
                     { label: "1.5 Hrs", h: 1, m: 30 },
                     { label: "2 Hours", h: 2, m: 0 },
                     { label: "3 Hours", h: 3, m: 0 },
+                    { label: "4 Hours", h: 4, m: 0 },
                   ].map((preset) => (
                     <button
                       key={preset.label}
@@ -919,7 +1050,7 @@ export const StudySession = () => {
               <textarea
                 className="form-textarea"
                 rows={3}
-                placeholder="What topics or questions did you master?"
+                placeholder="What topics, concepts or questions did you master?"
                 value={directNotes}
                 onChange={(e) => setDirectNotes(e.target.value)}
               />
@@ -939,14 +1070,14 @@ export const StudySession = () => {
               </label>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px" }}>
               <button
                 type="submit"
                 className="btn-primary"
                 style={{ padding: "12px 28px", fontSize: "1rem" }}
                 disabled={directSaving}
               >
-                {directSaving ? "Saving Study Data..." : "Save Study Record"}
+                {directSaving ? "Saving Study Data..." : "Save Study Record to Analytics"}
               </button>
             </div>
           </form>
@@ -1014,7 +1145,7 @@ export const StudySession = () => {
               Discard
             </button>
             <button type="submit" className="btn-primary" onClick={handleSaveTimerData}>
-              Save & Record Streak
+              Save & Update Analytics
             </button>
           </div>
         </div>
