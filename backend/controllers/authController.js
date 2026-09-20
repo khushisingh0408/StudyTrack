@@ -15,8 +15,10 @@ const generateToken = (userObj) => {
       academicField: userObj.academicField || "engineering",
       targetExam: userObj.targetExam || "",
       targetExamDate: userObj.targetExamDate || null,
-      dailyGoalMinutes: userObj.dailyGoalMinutes ? Number(userObj.dailyGoalMinutes) : 120,
-      weeklyGoalMinutes: userObj.weeklyGoalMinutes ? Number(userObj.weeklyGoalMinutes) : 840,
+      dailyGoalMinutes: userObj.dailyGoalMinutes ? Number(userObj.dailyGoalMinutes) : 180,
+      weeklyGoalMinutes: userObj.weeklyGoalMinutes ? Number(userObj.weeklyGoalMinutes) : (Number(userObj.dailyGoalMinutes || 180) * 7),
+      monthlyGoalMinutes: userObj.monthlyGoalMinutes ? Number(userObj.monthlyGoalMinutes) : (Number(userObj.dailyGoalMinutes || 180) * 30),
+      yearlyGoalMinutes: userObj.yearlyGoalMinutes ? Number(userObj.yearlyGoalMinutes) : (Number(userObj.dailyGoalMinutes || 180) * 365),
       currentStreak: userObj.currentStreak || 1,
       longestStreak: userObj.longestStreak || 1,
     };
@@ -32,7 +34,7 @@ const generateToken = (userObj) => {
 // @route   POST /api/auth/register
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, dailyGoalMinutes, weeklyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
+    const { name, email, password, dailyGoalMinutes, weeklyGoalMinutes, monthlyGoalMinutes, yearlyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Please provide name, email, and password" });
@@ -48,8 +50,10 @@ exports.register = async (req, res) => {
         name,
         email: email.toLowerCase(),
         password,
-        dailyGoalMinutes: dailyGoalMinutes ? Number(dailyGoalMinutes) : 120,
-        weeklyGoalMinutes: weeklyGoalMinutes ? Number(weeklyGoalMinutes) : 840,
+        dailyGoalMinutes: dailyGoalMinutes ? Number(dailyGoalMinutes) : 180,
+        weeklyGoalMinutes: weeklyGoalMinutes ? Number(weeklyGoalMinutes) : 1260,
+        monthlyGoalMinutes: monthlyGoalMinutes ? Number(monthlyGoalMinutes) : 5400,
+        yearlyGoalMinutes: yearlyGoalMinutes ? Number(yearlyGoalMinutes) : 64800,
         academicField: academicField || "engineering",
         targetExam: targetExam || "",
         targetExamDate: targetExamDate ? new Date(targetExamDate) : null,
@@ -71,6 +75,8 @@ exports.register = async (req, res) => {
           targetExamDate: user.targetExamDate,
           dailyGoalMinutes: user.dailyGoalMinutes,
           weeklyGoalMinutes: user.weeklyGoalMinutes,
+          monthlyGoalMinutes: user.monthlyGoalMinutes,
+          yearlyGoalMinutes: user.yearlyGoalMinutes,
           currentStreak: user.currentStreak,
           longestStreak: user.longestStreak,
         },
@@ -94,8 +100,10 @@ exports.register = async (req, res) => {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
-      dailyGoalMinutes: dailyGoalMinutes ? Number(dailyGoalMinutes) : 120,
-      weeklyGoalMinutes: weeklyGoalMinutes ? Number(weeklyGoalMinutes) : 840,
+      dailyGoalMinutes: dailyGoalMinutes ? Number(dailyGoalMinutes) : 180,
+      weeklyGoalMinutes: weeklyGoalMinutes ? Number(weeklyGoalMinutes) : 1260,
+      monthlyGoalMinutes: monthlyGoalMinutes ? Number(monthlyGoalMinutes) : 5400,
+      yearlyGoalMinutes: yearlyGoalMinutes ? Number(yearlyGoalMinutes) : 64800,
       academicField: academicField || "engineering",
       targetExam: targetExam || "",
       targetExamDate: targetExamDate || null,
@@ -187,6 +195,8 @@ exports.login = async (req, res) => {
           targetExamDate: user.targetExamDate,
           dailyGoalMinutes: user.dailyGoalMinutes,
           weeklyGoalMinutes: user.weeklyGoalMinutes,
+          monthlyGoalMinutes: user.monthlyGoalMinutes || 5400,
+          yearlyGoalMinutes: user.yearlyGoalMinutes || 64800,
           currentStreak: user.currentStreak,
           longestStreak: user.longestStreak,
         },
@@ -262,6 +272,8 @@ exports.demoLogin = async (req, res) => {
           targetExamDate: user.targetExamDate,
           dailyGoalMinutes: user.dailyGoalMinutes,
           weeklyGoalMinutes: user.weeklyGoalMinutes,
+          monthlyGoalMinutes: user.monthlyGoalMinutes || 5400,
+          yearlyGoalMinutes: user.yearlyGoalMinutes || 64800,
           currentStreak: user.currentStreak,
           longestStreak: user.longestStreak,
         },
@@ -360,7 +372,7 @@ exports.getMe = async (req, res) => {
 // @route   PUT /api/auth/profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, email, newPassword, password, dailyGoalMinutes, weeklyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
+    const { name, email, newPassword, password, dailyGoalMinutes, weeklyGoalMinutes, monthlyGoalMinutes, yearlyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
 
     if (mongoose.connection.readyState === 1) {
       const user = await User.findById(req.user._id);
@@ -377,6 +389,8 @@ exports.updateProfile = async (req, res) => {
       }
       if (dailyGoalMinutes !== undefined) user.dailyGoalMinutes = Number(dailyGoalMinutes);
       if (weeklyGoalMinutes !== undefined) user.weeklyGoalMinutes = Number(weeklyGoalMinutes);
+      if (monthlyGoalMinutes !== undefined) user.monthlyGoalMinutes = Number(monthlyGoalMinutes);
+      if (yearlyGoalMinutes !== undefined) user.yearlyGoalMinutes = Number(yearlyGoalMinutes);
       if (academicField) user.academicField = academicField;
       if (targetExam !== undefined) user.targetExam = targetExam;
       if (targetExamDate !== undefined) user.targetExamDate = targetExamDate ? new Date(targetExamDate) : null;
@@ -395,6 +409,8 @@ exports.updateProfile = async (req, res) => {
           targetExamDate: user.targetExamDate,
           dailyGoalMinutes: user.dailyGoalMinutes,
           weeklyGoalMinutes: user.weeklyGoalMinutes,
+          monthlyGoalMinutes: user.monthlyGoalMinutes,
+          yearlyGoalMinutes: user.yearlyGoalMinutes,
           currentStreak: user.currentStreak,
           longestStreak: user.longestStreak,
         },
@@ -417,6 +433,8 @@ exports.updateProfile = async (req, res) => {
     }
     if (dailyGoalMinutes !== undefined) db.users[userIdx].dailyGoalMinutes = Number(dailyGoalMinutes);
     if (weeklyGoalMinutes !== undefined) db.users[userIdx].weeklyGoalMinutes = Number(weeklyGoalMinutes);
+    if (monthlyGoalMinutes !== undefined) db.users[userIdx].monthlyGoalMinutes = Number(monthlyGoalMinutes);
+    if (yearlyGoalMinutes !== undefined) db.users[userIdx].yearlyGoalMinutes = Number(yearlyGoalMinutes);
     if (academicField) db.users[userIdx].academicField = academicField;
     if (targetExam !== undefined) db.users[userIdx].targetExam = targetExam;
     if (targetExamDate !== undefined) db.users[userIdx].targetExamDate = targetExamDate;

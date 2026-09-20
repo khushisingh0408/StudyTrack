@@ -78,10 +78,16 @@ exports.getOverview = async (req, res) => {
 
     const completedSubTopics = subTopics.filter((st) => st.status === "completed").length;
     const completionRate = subTopics.length > 0 ? Math.round((completedSubTopics / subTopics.length) * 100) : 0;
-    const dailyGoalMinutes = user?.dailyGoalMinutes || 120;
-    const weeklyGoalMinutes = user?.weeklyGoalMinutes || 840;
+    const dailyGoalMinutes = user?.dailyGoalMinutes || 180;
+    const weeklyGoalMinutes = user?.weeklyGoalMinutes || (dailyGoalMinutes * 7);
+    const monthlyGoalMinutes = user?.monthlyGoalMinutes || (dailyGoalMinutes * 30);
+    const yearlyGoalMinutes = user?.yearlyGoalMinutes || (dailyGoalMinutes * 365);
+
     const dailyGoalProgress = Math.min(100, Math.round((todayMinutes / dailyGoalMinutes) * 100));
     const weeklyGoalProgress = Math.min(100, Math.round((weekMinutes / weeklyGoalMinutes) * 100));
+    const monthlyGoalProgress = Math.min(100, Math.round((monthMinutes / monthlyGoalMinutes) * 100));
+    const yearlyGoalProgress = Math.min(100, Math.round((yearMinutes / yearlyGoalMinutes) * 100));
+
     const avgProductivity = sessions.length > 0 ? Number((prodSum / sessions.length).toFixed(1)) : 0;
     const trackingDepthPercentage = totalMinutes > 0 ? Math.round((detailedLogMinutes / totalMinutes) * 100) : 0;
 
@@ -98,8 +104,12 @@ exports.getOverview = async (req, res) => {
         avgProductivity,
         dailyGoalProgress,
         weeklyGoalProgress,
+        monthlyGoalProgress,
+        yearlyGoalProgress,
         dailyGoalMinutes,
         weeklyGoalMinutes,
+        monthlyGoalMinutes,
+        yearlyGoalMinutes,
         currentStreak: user?.currentStreak || 0,
         longestStreak: user?.longestStreak || 0,
         subjectCount: subjects.length,

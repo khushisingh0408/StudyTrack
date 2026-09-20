@@ -74,6 +74,8 @@ export const Register = () => {
         targetExam,
         dailyGoalMinutes: Number(dailyGoalMinutes),
         weeklyGoalMinutes: Number(dailyGoalMinutes) * 7,
+        monthlyGoalMinutes: Number(dailyGoalMinutes) * 30,
+        yearlyGoalMinutes: Number(dailyGoalMinutes) * 365,
       });
 
       // 2. Automatically load starter syllabus template for this field

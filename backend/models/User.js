@@ -22,11 +22,19 @@ const userSchema = new mongoose.Schema(
     },
     dailyGoalMinutes: {
       type: Number,
-      default: 120, // 2 hours default
+      default: 180, // 3 hours default
     },
     weeklyGoalMinutes: {
       type: Number,
-      default: 840, // 14 hours default
+      default: 1260, // 21 hours default
+    },
+    monthlyGoalMinutes: {
+      type: Number,
+      default: 5400, // 90 hours default
+    },
+    yearlyGoalMinutes: {
+      type: Number,
+      default: 64800, // 1080 hours default
     },
     academicField: {
       type: String,

@@ -266,16 +266,18 @@ export const Dashboard = () => {
         <StatCard
           title="Monthly Study Time"
           value={formatMinutes(stats?.monthMinutes)}
-          subtext={`This Month • Total ${(stats?.monthMinutes / 60 || 0).toFixed(1)} hrs`}
+          subtext={`Target: ${formatMinutes(stats?.monthlyGoalMinutes || 5400)} / month`}
           icon={Calendar}
           color="cyan"
+          progress={stats?.monthlyGoalProgress || 0}
         />
         <StatCard
           title="Yearly Study Time"
           value={formatMinutes(stats?.yearMinutes)}
-          subtext={`This Year • Total ${stats?.totalHours || 0} hrs`}
+          subtext={`Target: ${formatMinutes(stats?.yearlyGoalMinutes || 64800)} / year`}
           icon={Clock}
           color="indigo"
+          progress={stats?.yearlyGoalProgress || 0}
         />
         <StatCard
           title="Active Streak"

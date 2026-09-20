@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal } from "./Modal";
 import { useAuth } from "../context/AuthContext";
 import { User, Target, Flame, CheckCircle, AlertCircle, Calendar, GraduationCap, Lock, Mail } from "lucide-react";
@@ -13,10 +13,26 @@ export const ProfileModal = ({ isOpen, onClose }) => {
   const [targetExamDate, setTargetExamDate] = useState(
     user?.targetExamDate ? user.targetExamDate.split("T")[0] : ""
   );
-  const [dailyGoalMinutes, setDailyGoalMinutes] = useState(user?.dailyGoalMinutes || 120);
-  const [weeklyGoalMinutes, setWeeklyGoalMinutes] = useState(user?.weeklyGoalMinutes || 840);
+  const [dailyGoalMinutes, setDailyGoalMinutes] = useState(user?.dailyGoalMinutes || 180);
+  const [weeklyGoalMinutes, setWeeklyGoalMinutes] = useState(user?.weeklyGoalMinutes || 1260);
+  const [monthlyGoalMinutes, setMonthlyGoalMinutes] = useState(user?.monthlyGoalMinutes || 5400);
+  const [yearlyGoalMinutes, setYearlyGoalMinutes] = useState(user?.yearlyGoalMinutes || 64800);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setEmail(user.email || "");
+      setAcademicField(user.academicField || "engineering");
+      setTargetExam(user.targetExam || "Target Competitive Exam");
+      setTargetExamDate(user.targetExamDate ? user.targetExamDate.split("T")[0] : "");
+      setDailyGoalMinutes(user.dailyGoalMinutes || 180);
+      setWeeklyGoalMinutes(user.weeklyGoalMinutes || (user.dailyGoalMinutes ? user.dailyGoalMinutes * 7 : 1260));
+      setMonthlyGoalMinutes(user.monthlyGoalMinutes || (user.dailyGoalMinutes ? user.dailyGoalMinutes * 30 : 5400));
+      setYearlyGoalMinutes(user.yearlyGoalMinutes || (user.dailyGoalMinutes ? user.dailyGoalMinutes * 365 : 64800));
+    }
+  }, [user, isOpen]);
 
   const academicFields = [
     { id: "medical", name: "MBBS / NEET-PG / Medical" },
@@ -41,6 +57,8 @@ export const ProfileModal = ({ isOpen, onClose }) => {
         targetExamDate: targetExamDate ? new Date(targetExamDate) : null,
         dailyGoalMinutes: Number(dailyGoalMinutes),
         weeklyGoalMinutes: Number(weeklyGoalMinutes),
+        monthlyGoalMinutes: Number(monthlyGoalMinutes),
+        yearlyGoalMinutes: Number(yearlyGoalMinutes),
       };
 
       if (newPassword && newPassword.trim().length >= 6) {
@@ -48,7 +66,7 @@ export const ProfileModal = ({ isOpen, onClose }) => {
       }
 
       await updateProfile(payload);
-      setMessage({ text: "Profile, login credentials & study goals updated successfully!", type: "success" });
+      setMessage({ text: "Profile, login credentials & study targets updated successfully!", type: "success" });
       setNewPassword("");
       setTimeout(() => {
         onClose();
@@ -201,9 +219,9 @@ export const ProfileModal = ({ isOpen, onClose }) => {
         {/* Study Goals */}
         <div>
           <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            ⏱️ Study Goals
+            ⏱️ Study Goals & Targets
           </span>
-          <div className="grid-cols-2" style={{ marginTop: "8px" }}>
+          <div className="grid-cols-2" style={{ marginTop: "8px", rowGap: "12px" }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Daily Goal (Minutes)</label>
               <input
@@ -233,6 +251,38 @@ export const ProfileModal = ({ isOpen, onClose }) => {
               />
               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                 ~ {(weeklyGoalMinutes / 60).toFixed(1)} hours/week
+              </span>
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Monthly Goal (Minutes)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={monthlyGoalMinutes}
+                min="120"
+                step="60"
+                onChange={(e) => setMonthlyGoalMinutes(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                ~ {(monthlyGoalMinutes / 60).toFixed(1)} hours/month
+              </span>
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Yearly Goal (Minutes)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={yearlyGoalMinutes}
+                min="600"
+                step="300"
+                onChange={(e) => setYearlyGoalMinutes(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                ~ {(yearlyGoalMinutes / 60).toFixed(1)} hours/year
               </span>
             </div>
           </div>
