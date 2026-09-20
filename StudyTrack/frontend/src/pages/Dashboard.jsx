@@ -245,8 +245,8 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* KPI Metric Cards Grid */}
-      <div className="grid-cols-4">
+      {/* KPI Metric Cards Grid (Daily, Weekly, Monthly, Yearly, Streak, Mastery) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
         <StatCard
           title="Today's Study Time"
           value={formatMinutes(stats?.todayMinutes)}
@@ -254,13 +254,6 @@ export const Dashboard = () => {
           icon={Timer}
           color="indigo"
           progress={stats?.dailyGoalProgress || 0}
-        />
-        <StatCard
-          title="Active Streak"
-          value={`${stats?.currentStreak || 0} Days`}
-          subtext={`Personal best: ${stats?.longestStreak || 0} days`}
-          icon={Flame}
-          color="amber"
         />
         <StatCard
           title="Weekly Study Time"
@@ -271,11 +264,32 @@ export const Dashboard = () => {
           progress={stats?.weeklyGoalProgress || 0}
         />
         <StatCard
+          title="Monthly Study Time"
+          value={formatMinutes(stats?.monthMinutes)}
+          subtext={`This Month • Total ${(stats?.monthMinutes / 60 || 0).toFixed(1)} hrs`}
+          icon={Calendar}
+          color="cyan"
+        />
+        <StatCard
+          title="Yearly Study Time"
+          value={formatMinutes(stats?.yearMinutes)}
+          subtext={`This Year • Total ${stats?.totalHours || 0} hrs`}
+          icon={Clock}
+          color="indigo"
+        />
+        <StatCard
+          title="Active Streak"
+          value={`${stats?.currentStreak || 0} Days`}
+          subtext={`Personal best: ${stats?.longestStreak || 0} days`}
+          icon={Flame}
+          color="amber"
+        />
+        <StatCard
           title="Curriculum Mastery"
           value={`${stats?.completionRate || 0}%`}
           subtext={`${stats?.completedSubTopicCount || 0} / ${stats?.subTopicCount || 0} Sub-Topics done`}
           icon={Award}
-          color="cyan"
+          color="rose"
           progress={stats?.completionRate || 0}
         />
       </div>
