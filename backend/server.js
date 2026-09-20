@@ -19,18 +19,33 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// API Routes
+// API Routes (mounted with /api/ and bare prefix for seamless Vercel Serverless compatibility)
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
 app.use("/api/subjects", subjectRoutes);
+app.use("/subjects", subjectRoutes);
+
 app.use("/api/topics", topicRoutes);
+app.use("/topics", topicRoutes);
+
 app.use("/api/subtopics", subTopicRoutes);
+app.use("/subtopics", subTopicRoutes);
+
 app.use("/api/sessions", sessionRoutes);
+app.use("/sessions", sessionRoutes);
+
 app.use("/api/tasks", taskRoutes);
+app.use("/tasks", taskRoutes);
+
 app.use("/api/analytics", analyticsRoutes);
+app.use("/analytics", analyticsRoutes);
+
 app.use("/api/templates", templateRoutes);
+app.use("/templates", templateRoutes);
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),

@@ -1,71 +1,114 @@
 const fs = require("fs");
 const path = require("path");
-const bcrypt = require("bcryptjs");
 
-const DB_FILE = path.join(__dirname, "../data/local_db.json");
-const BACKUP_FILE = path.join(__dirname, "../data/local_db.backup.json");
+const ORIGINAL_DB_FILE = path.join(__dirname, "../data/local_db.json");
+const ORIGINAL_BACKUP_FILE = path.join(__dirname, "../data/local_db.backup.json");
 
-// Ensure data directory exists
+// In serverless (e.g. Vercel), the filesystem is read-only except /tmp
+const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const TMP_DB_FILE = path.join("/tmp", "studytrack_db.json");
+const TMP_BACKUP_FILE = path.join("/tmp", "studytrack_db.backup.json");
+
+const DB_FILE = isServerless ? TMP_DB_FILE : ORIGINAL_DB_FILE;
+const BACKUP_FILE = isServerless ? TMP_BACKUP_FILE : ORIGINAL_BACKUP_FILE;
+
+// Memory cache fallback in case disk writes are blocked
+let memoryDB = null;
+
+// Ensure data directory and seed data exists
 const ensureDataDir = () => {
-  const dir = path.dirname(DB_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData = JSON.stringify(
-      {
-        users: [],
-        subjects: [],
-        topics: [],
-        subtopics: [],
-        sessions: [],
-        tasks: [],
-      },
-      null,
-      2
-    );
-    fs.writeFileSync(DB_FILE, initialData, "utf-8");
+  try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    if (!fs.existsSync(DB_FILE)) {
+      // If we are in serverless, try to seed from ORIGINAL_DB_FILE
+      if (isServerless && fs.existsSync(ORIGINAL_DB_FILE)) {
+        try {
+          const originalContent = fs.readFileSync(ORIGINAL_DB_FILE, "utf-8");
+          fs.writeFileSync(DB_FILE, originalContent, "utf-8");
+          return;
+        } catch (e) {
+          // Fallback to initial seed
+        }
+      }
+
+      const initialData = JSON.stringify(
+        {
+          users: [],
+          subjects: [],
+          topics: [],
+          subtopics: [],
+          sessions: [],
+          tasks: [],
+        },
+        null,
+        2
+      );
+      fs.writeFileSync(DB_FILE, initialData, "utf-8");
+    }
+  } catch (e) {
+    // If filesystem write fails, initialize memoryDB
+    if (!memoryDB) {
+      if (fs.existsSync(ORIGINAL_DB_FILE)) {
+        try {
+          memoryDB = JSON.parse(fs.readFileSync(ORIGINAL_DB_FILE, "utf-8"));
+        } catch (err) {
+          memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
+        }
+      } else {
+        memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
+      }
+    }
   }
 };
 
 ensureDataDir();
 
 const readDB = () => {
+  if (memoryDB) {
+    return memoryDB;
+  }
+
   try {
     ensureDataDir();
     const data = fs.readFileSync(DB_FILE, "utf-8");
     return JSON.parse(data);
   } catch (e) {
-    console.warn("Primary local_db read error, attempting backup recovery:", e.message);
     try {
       if (fs.existsSync(BACKUP_FILE)) {
         const backupData = fs.readFileSync(BACKUP_FILE, "utf-8");
         const parsed = JSON.parse(backupData);
-        // Restore primary from backup
-        fs.writeFileSync(DB_FILE, backupData, "utf-8");
+        try {
+          fs.writeFileSync(DB_FILE, backupData, "utf-8");
+        } catch (we) {}
         return parsed;
       }
-    } catch (bkErr) {
-      console.error("Backup recovery failed:", bkErr.message);
+      if (fs.existsSync(ORIGINAL_DB_FILE)) {
+        return JSON.parse(fs.readFileSync(ORIGINAL_DB_FILE, "utf-8"));
+      }
+    } catch (bkErr) {}
+
+    if (!memoryDB) {
+      memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
     }
-    return { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
+    return memoryDB;
   }
 };
 
 const writeDB = (data) => {
+  memoryDB = data;
   try {
     ensureDataDir();
     const jsonStr = JSON.stringify(data, null, 2);
-    // 1. Write to backup first
     try {
       fs.writeFileSync(BACKUP_FILE, jsonStr, "utf-8");
-    } catch (bErr) {
-      // Non-fatal
-    }
-    // 2. Write to main file
+    } catch (bErr) {}
     fs.writeFileSync(DB_FILE, jsonStr, "utf-8");
   } catch (err) {
-    console.error("Error persisting data to local_db:", err.message);
+    // Disk write error in serverless - handled by memoryDB cache
   }
 };
 
