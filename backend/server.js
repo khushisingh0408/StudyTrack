@@ -53,10 +53,33 @@ const { seedDemoUser } = require("./config/seedDemo");
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to DB and start listening
-connectDB().then(async () => {
-  await seedDemoUser();
-  app.listen(PORT, () => {
-    console.log(`StudyTrack Server running on port ${PORT}`);
-  });
+let dbPromise = null;
+const initDB = async () => {
+  if (!dbPromise) {
+    dbPromise = connectDB().then(async () => {
+      await seedDemoUser();
+    });
+  }
+  return dbPromise;
+};
+
+// Ensure DB is initialized for serverless requests
+app.use(async (req, res, next) => {
+  try {
+    await initDB();
+  } catch (err) {
+    console.error("DB init error in request:", err);
+  }
+  next();
 });
+
+// If running directly (e.g. locally or on standalone server)
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  initDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`StudyTrack Server running on port ${PORT}`);
+    });
+  });
+}
+
+module.exports = app;

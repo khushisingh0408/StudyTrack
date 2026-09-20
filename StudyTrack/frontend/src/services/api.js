@@ -1,6 +1,4 @@
-// API service client with automatic auth header injection
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000/api" : "/api");
 
 const request = async (endpoint, options = {}) => {
   const token = localStorage.getItem("studytrack_token");
