@@ -11,17 +11,24 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem("studytrack_token");
+      const storedUser = localStorage.getItem("studytrack_user");
+
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {}
+      }
+
       if (storedToken) {
         try {
           const res = await api.getMe();
           if (res.success && res.user) {
             setUser(res.user);
-          } else {
-            logout();
+            localStorage.setItem("studytrack_user", JSON.stringify(res.user));
           }
         } catch (err) {
-          console.warn("Failed to restore session:", err);
-          logout();
+          console.warn("Could not sync profile from server, using local session:", err.message);
+          // Keep the stored user session active instead of logging out!
         }
       }
       setLoading(false);

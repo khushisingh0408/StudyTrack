@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { Modal } from "./Modal";
 import { useAuth } from "../context/AuthContext";
-import { User, Target, Flame, CheckCircle, AlertCircle, Calendar, GraduationCap } from "lucide-react";
+import { User, Target, Flame, CheckCircle, AlertCircle, Calendar, GraduationCap, Lock, Mail } from "lucide-react";
 
 export const ProfileModal = ({ isOpen, onClose }) => {
   const { user, updateProfile } = useAuth();
   const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [newPassword, setNewPassword] = useState("");
   const [academicField, setAcademicField] = useState(user?.academicField || "engineering");
   const [targetExam, setTargetExam] = useState(user?.targetExam || "Target Competitive Exam");
   const [targetExamDate, setTargetExamDate] = useState(
@@ -31,19 +33,27 @@ export const ProfileModal = ({ isOpen, onClose }) => {
     setMessage({ text: "", type: "" });
 
     try {
-      await updateProfile({
+      const payload = {
         name,
+        email,
         academicField,
         targetExam,
         targetExamDate: targetExamDate ? new Date(targetExamDate) : null,
         dailyGoalMinutes: Number(dailyGoalMinutes),
         weeklyGoalMinutes: Number(weeklyGoalMinutes),
-      });
-      setMessage({ text: "Profile and study goals updated successfully!", type: "success" });
+      };
+
+      if (newPassword && newPassword.trim().length >= 6) {
+        payload.newPassword = newPassword.trim();
+      }
+
+      await updateProfile(payload);
+      setMessage({ text: "Profile, login credentials & study goals updated successfully!", type: "success" });
+      setNewPassword("");
       setTimeout(() => {
         onClose();
         setMessage({ text: "", type: "" });
-      }, 1200);
+      }, 1500);
     } catch (err) {
       setMessage({ text: err.message || "Failed to update profile", type: "error" });
     } finally {
@@ -52,7 +62,7 @@ export const ProfileModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Study Profile & Target Exam Settings" maxWidth="580px">
+    <Modal isOpen={isOpen} onClose={onClose} title="User Profile, Credentials & Goal Settings" maxWidth="620px">
       <form onSubmit={handleSubmit}>
         {message.text && (
           <div
@@ -97,52 +107,87 @@ export const ProfileModal = ({ isOpen, onClose }) => {
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.813rem", color: "#fbbf24", marginTop: "4px" }}>
               <Flame size={14} className="flame-glow" />
               <span>Current Streak: <strong>{user?.currentStreak || 0} days</strong></span>
-              <span style={{ color: "var(--text-muted)" }}>(Best: {user?.longestStreak || 0})</span>
+              <span style={{ color: "var(--text-muted)" }}>(Personal Best: {user?.longestStreak || 0})</span>
             </div>
           </div>
         </div>
 
-        <div className="grid-cols-2">
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              className="form-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+        {/* User Account Credentials */}
+        <div style={{ marginBottom: "18px" }}>
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            👤 Login & Account Info
+          </span>
+          <div className="grid-cols-2" style={{ marginTop: "8px" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Full Name / Username</label>
+              <input
+                type="text"
+                className="form-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Email Address</label>
+              <input
+                type="email"
+                className="form-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Academic Field / Stream</label>
-            <select
-              className="form-select"
-              value={academicField}
-              onChange={(e) => setAcademicField(e.target.value)}
-            >
-              {academicFields.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
+          <div className="form-group" style={{ marginTop: "12px", marginBottom: 0 }}>
+            <label className="form-label">Change Password (Optional)</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Leave blank to keep your current password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              minLength={6}
+            />
           </div>
         </div>
 
-        <div className="grid-cols-2">
-          <div className="form-group">
-            <label className="form-label">Target Exam Name</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="e.g. NEET PG 2026, UPSC 2026, GATE"
-              value={targetExam}
-              onChange={(e) => setTargetExam(e.target.value)}
-            />
+        {/* Academic Stream & Target Exam */}
+        <div style={{ marginBottom: "18px" }}>
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            🎯 Academic & Exam Target
+          </span>
+          <div className="grid-cols-2" style={{ marginTop: "8px" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Academic Field / Stream</label>
+              <select
+                className="form-select"
+                value={academicField}
+                onChange={(e) => setAcademicField(e.target.value)}
+              >
+                {academicFields.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Target Exam Name</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. NEET PG, UPSC, GATE, JEE"
+                value={targetExam}
+                onChange={(e) => setTargetExam(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginTop: "12px", marginBottom: 0 }}>
             <label className="form-label">Target Exam Date (for countdown)</label>
             <input
               type="date"
@@ -153,37 +198,43 @@ export const ProfileModal = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        <div className="grid-cols-2">
-          <div className="form-group">
-            <label className="form-label">Daily Study Goal (Minutes)</label>
-            <input
-              type="number"
-              className="form-input"
-              value={dailyGoalMinutes}
-              min="15"
-              step="15"
-              onChange={(e) => setDailyGoalMinutes(e.target.value)}
-              required
-            />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              ~ {(dailyGoalMinutes / 60).toFixed(1)} hours/day
-            </span>
-          </div>
+        {/* Study Goals */}
+        <div>
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ⏱️ Study Goals
+          </span>
+          <div className="grid-cols-2" style={{ marginTop: "8px" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Daily Goal (Minutes)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={dailyGoalMinutes}
+                min="15"
+                step="15"
+                onChange={(e) => setDailyGoalMinutes(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                ~ {(dailyGoalMinutes / 60).toFixed(1)} hours/day
+              </span>
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Weekly Study Goal (Minutes)</label>
-            <input
-              type="number"
-              className="form-input"
-              value={weeklyGoalMinutes}
-              min="60"
-              step="30"
-              onChange={(e) => setWeeklyGoalMinutes(e.target.value)}
-              required
-            />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              ~ {(weeklyGoalMinutes / 60).toFixed(1)} hours/week
-            </span>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Weekly Goal (Minutes)</label>
+              <input
+                type="number"
+                className="form-input"
+                value={weeklyGoalMinutes}
+                min="60"
+                step="30"
+                onChange={(e) => setWeeklyGoalMinutes(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                ~ {(weeklyGoalMinutes / 60).toFixed(1)} hours/week
+              </span>
+            </div>
           </div>
         </div>
 

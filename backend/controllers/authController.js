@@ -342,13 +342,21 @@ exports.getMe = async (req, res) => {
 // @route   PUT /api/auth/profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, dailyGoalMinutes, weeklyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
+    const { name, email, newPassword, password, dailyGoalMinutes, weeklyGoalMinutes, academicField, targetExam, targetExamDate } = req.body;
 
     if (mongoose.connection.readyState === 1) {
       const user = await User.findById(req.user._id);
       if (!user) return res.status(404).json({ message: "User not found" });
 
-      if (name) user.name = name;
+      if (name) user.name = name.trim();
+      if (email) user.email = email.trim().toLowerCase();
+      if (newPassword || password) {
+        const passToSet = (newPassword || password).trim();
+        if (passToSet.length >= 6) {
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(passToSet, salt);
+        }
+      }
       if (dailyGoalMinutes !== undefined) user.dailyGoalMinutes = Number(dailyGoalMinutes);
       if (weeklyGoalMinutes !== undefined) user.weeklyGoalMinutes = Number(weeklyGoalMinutes);
       if (academicField) user.academicField = academicField;
@@ -380,7 +388,15 @@ exports.updateProfile = async (req, res) => {
     const userIdx = db.users.findIndex((u) => u._id === req.user._id || u.id === req.user._id);
     if (userIdx === -1) return res.status(404).json({ message: "User not found" });
 
-    if (name) db.users[userIdx].name = name;
+    if (name) db.users[userIdx].name = name.trim();
+    if (email) db.users[userIdx].email = email.trim().toLowerCase();
+    if (newPassword || password) {
+      const passToSet = (newPassword || password).trim();
+      if (passToSet.length >= 6) {
+        const salt = await bcrypt.genSalt(10);
+        db.users[userIdx].password = await bcrypt.hash(passToSet, salt);
+      }
+    }
     if (dailyGoalMinutes !== undefined) db.users[userIdx].dailyGoalMinutes = Number(dailyGoalMinutes);
     if (weeklyGoalMinutes !== undefined) db.users[userIdx].weeklyGoalMinutes = Number(weeklyGoalMinutes);
     if (academicField) db.users[userIdx].academicField = academicField;
@@ -389,7 +405,7 @@ exports.updateProfile = async (req, res) => {
 
     writeDB(db);
 
-    const { password, ...safeUser } = db.users[userIdx];
+    const { password: _, ...safeUser } = db.users[userIdx];
     res.json({ success: true, message: "Profile updated successfully", user: safeUser });
   } catch (error) {
     res.status(500).json({ message: "Server error updating profile", error: error.message });
