@@ -5,9 +5,27 @@ const bcrypt = require("bcryptjs");
 const { readDB, writeDB, generateId } = require("../config/localStore");
 const { seedDemoUser, DEMO_EMAIL } = require("../config/seedDemo");
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || "studytrack_super_secret_jwt_key_2026_secure_key", {
-    expiresIn: "30d",
+const generateToken = (userObj) => {
+  let payload;
+  if (typeof userObj === "object" && userObj !== null) {
+    payload = {
+      id: (userObj._id || userObj.id || "").toString(),
+      name: userObj.name || "Scholar",
+      email: (userObj.email || "").toLowerCase(),
+      academicField: userObj.academicField || "engineering",
+      targetExam: userObj.targetExam || "",
+      targetExamDate: userObj.targetExamDate || null,
+      dailyGoalMinutes: userObj.dailyGoalMinutes ? Number(userObj.dailyGoalMinutes) : 120,
+      weeklyGoalMinutes: userObj.weeklyGoalMinutes ? Number(userObj.weeklyGoalMinutes) : 840,
+      currentStreak: userObj.currentStreak || 1,
+      longestStreak: userObj.longestStreak || 1,
+    };
+  } else {
+    payload = { id: String(userObj) };
+  }
+
+  return jwt.sign(payload, process.env.JWT_SECRET || "studytrack_super_secret_jwt_key_2026_secure_key", {
+    expiresIn: "90d",
   });
 };
 
@@ -37,7 +55,7 @@ exports.register = async (req, res) => {
         targetExamDate: targetExamDate ? new Date(targetExamDate) : null,
       });
 
-      const token = generateToken(user._id);
+      const token = generateToken(user);
 
       return res.status(201).json({
         success: true,
@@ -90,7 +108,7 @@ exports.register = async (req, res) => {
     db.users.push(newUser);
     writeDB(db);
 
-    const token = generateToken(newUserId);
+    const token = generateToken(newUser);
     const { password: _, ...safeUser } = newUser;
 
     res.status(201).json({
@@ -153,7 +171,7 @@ exports.login = async (req, res) => {
         });
       }
 
-      const token = generateToken(user._id);
+      const token = generateToken(user);
 
       return res.json({
         success: true,
@@ -205,7 +223,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id || user.id);
+    const token = generateToken(user);
     const { password: _, ...safeUser } = user;
 
     res.json({
@@ -229,7 +247,7 @@ exports.demoLogin = async (req, res) => {
       if (!user) {
         return res.status(404).json({ message: "Demo account could not be initialized" });
       }
-      const token = generateToken(user._id);
+      const token = generateToken(user);
       return res.json({
         success: true,
         message: "Demo Login Successful",
@@ -256,7 +274,7 @@ exports.demoLogin = async (req, res) => {
       return res.status(404).json({ message: "Demo account could not be initialized" });
     }
 
-    const token = generateToken(user._id || user.id);
+    const token = generateToken(user);
     const { password: _, ...safeUser } = user;
 
     res.json({
