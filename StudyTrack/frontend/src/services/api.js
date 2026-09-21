@@ -1,9 +1,25 @@
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000/api" : "/api");
 
-// Helper utilities for local storage caching
+// Helper utilities for persistent user-scoped local storage
+const getCurrentUser = () => {
+  try {
+    const userStr = localStorage.getItem("studytrack_user");
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const getStorageKey = (key) => {
+  const user = getCurrentUser();
+  const userId = user ? (user._id || user.id || user.email || "default") : "default";
+  return `studytrack_perm_${userId}_${key}`;
+};
+
 const getLocalData = (key, defaultVal = null) => {
   try {
-    const item = localStorage.getItem(`studytrack_cache_${key}`);
+    const userKey = getStorageKey(key);
+    const item = localStorage.getItem(userKey) || localStorage.getItem(`studytrack_cache_${key}`);
     return item ? JSON.parse(item) : defaultVal;
   } catch (e) {
     return defaultVal;
@@ -12,12 +28,39 @@ const getLocalData = (key, defaultVal = null) => {
 
 const setLocalData = (key, val) => {
   try {
-    localStorage.setItem(`studytrack_cache_${key}`, JSON.stringify(val));
+    const userKey = getStorageKey(key);
+    const jsonStr = JSON.stringify(val);
+    localStorage.setItem(userKey, jsonStr);
+    localStorage.setItem(`studytrack_cache_${key}`, jsonStr);
   } catch (e) {}
 };
 
 const generateLocalId = () => {
   return "loc_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+};
+
+// Merge server list and local list safely without losing any user entries
+const mergeCollections = (localList = [], serverList = [], idKey = "_id") => {
+  const map = new Map();
+  
+  // First add all local items
+  (localList || []).forEach((item) => {
+    if (!item) return;
+    const id = item[idKey] || item.id || item.title || item.name;
+    if (id) map.set(String(id), item);
+  });
+
+  // Then merge/update with server items
+  (serverList || []).forEach((item) => {
+    if (!item) return;
+    const id = item[idKey] || item.id || item.title || item.name;
+    if (id) {
+      const existing = map.get(String(id));
+      map.set(String(id), { ...(existing || {}), ...item });
+    }
+  });
+
+  return Array.from(map.values());
 };
 
 const request = async (endpoint, options = {}) => {
@@ -42,7 +85,6 @@ const request = async (endpoint, options = {}) => {
 
     if (!response.ok) {
       if (response.status === 401 && endpoint === "/auth/me") {
-        // Only invalidate if explicitly token invalidation
         const storedUser = localStorage.getItem("studytrack_user");
         if (!storedUser) {
           localStorage.removeItem("studytrack_token");
@@ -57,43 +99,65 @@ const request = async (endpoint, options = {}) => {
 
     return data;
   } catch (err) {
-    // Network or server error - throw for caller to handle or fallback
     throw err;
   }
 };
 
-// Auto-recalculate analytics summary from cached sessions, subjects, and tasks
+// Robust recalculation of analytics summary from all stored sessions, subjects, and tasks
 const updateLocalAnalyticsCache = () => {
   try {
     const subjects = getLocalData("subjects", []);
     const sessions = getLocalData("sessions", []);
     const tasks = getLocalData("tasks", []);
-    const userStr = localStorage.getItem("studytrack_user");
-    const user = userStr ? JSON.parse(userStr) : null;
+    const user = getCurrentUser();
 
-    const todayStr = new Date().toISOString().split("T")[0];
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const todayLocalStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     let todayMinutes = 0;
     let weekMinutes = 0;
     let monthMinutes = 0;
     let yearMinutes = 0;
+    let totalMinutes = 0;
+    let prodSum = 0;
+    let detailedLogMinutes = 0;
+
+    const subjectTimeMap = {};
 
     sessions.forEach((s) => {
       const sDate = new Date(s.date || s.createdAt);
       const mins = Number(s.durationMinutes) || 0;
-      yearMinutes += mins;
+      totalMinutes += mins;
+      prodSum += Number(s.productivityRating) || 4;
 
-      if (sDate.toISOString().split("T")[0] === todayStr) {
+      if (s.topic || s.subTopic) {
+        detailedLogMinutes += mins;
+      }
+
+      // Track by subject
+      const subjId = (s.subject?._id || s.subject?.id || s.subject || s.subjectName || "general").toString();
+      subjectTimeMap[subjId] = (subjectTimeMap[subjId] || 0) + mins;
+
+      const sDateStr = typeof s.date === "string" && s.date.includes("T") ? s.date.split("T")[0] : null;
+      const sLocalStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`;
+
+      if (sDate >= startOfToday || sDateStr === todayLocalStr || sLocalStr === todayLocalStr) {
         todayMinutes += mins;
       }
-      if (sDate >= sevenDaysAgo) {
+      if (sDate >= startOfWeek) {
         weekMinutes += mins;
       }
-      if (sDate >= thirtyDaysAgo) {
+      if (sDate >= startOfMonth) {
         monthMinutes += mins;
+      }
+      if (sDate >= startOfYear) {
+        yearMinutes += mins;
       }
     });
 
@@ -110,30 +174,50 @@ const updateLocalAnalyticsCache = () => {
     const monthlyGoalMinutes = user?.monthlyGoalMinutes || dailyGoalMinutes * 30;
     const yearlyGoalMinutes = user?.yearlyGoalMinutes || dailyGoalMinutes * 365;
 
+    const taskCounts = {
+      todo: tasks.filter((t) => t.status === "todo").length,
+      in_progress: tasks.filter((t) => t.status === "in_progress").length,
+      completed: tasks.filter((t) => t.status === "completed").length,
+      total: tasks.length,
+    };
+
+    const avgProductivity = sessions.length > 0 ? Number((prodSum / sessions.length).toFixed(1)) : 5;
+    const trackingDepthPercentage = totalMinutes > 0 ? Math.round((detailedLogMinutes / totalMinutes) * 100) : 0;
+
     const stats = {
       todayMinutes,
       weekMinutes,
       monthMinutes,
       yearMinutes,
-      dailyGoalMinutes,
-      weeklyGoalMinutes,
-      monthlyGoalMinutes,
-      yearlyGoalMinutes,
+      totalMinutes,
+      totalHours: Number((totalMinutes / 60).toFixed(1)),
+      totalSessions: sessions.length,
+      avgProductivity,
       dailyGoalProgress: Math.min(100, Math.round((todayMinutes / dailyGoalMinutes) * 100)),
       weeklyGoalProgress: Math.min(100, Math.round((weekMinutes / weeklyGoalMinutes) * 100)),
       monthlyGoalProgress: Math.min(100, Math.round((monthMinutes / monthlyGoalMinutes) * 100)),
       yearlyGoalProgress: Math.min(100, Math.round((yearMinutes / yearlyGoalMinutes) * 100)),
-      currentStreak: user?.currentStreak || 1,
-      longestStreak: user?.longestStreak || 1,
+      dailyGoalMinutes,
+      weeklyGoalMinutes,
+      monthlyGoalMinutes,
+      yearlyGoalMinutes,
+      currentStreak: user?.currentStreak || (todayMinutes > 0 ? 1 : 0),
+      longestStreak: user?.longestStreak || (todayMinutes > 0 ? 1 : 0),
+      subjectCount: subjects.length,
       totalSubjects: subjects.length,
       subTopicCount: totalSubTopics,
       completedSubTopicCount: completedSubTopics,
       completionRate,
-      todoTasksCount: tasks.filter((t) => t.status === "todo").length,
+      trackingDepthPercentage,
+      todoTasksCount: taskCounts.todo,
+      tasks: taskCounts,
     };
 
     setLocalData("analytics_overview", { success: true, stats });
-  } catch (e) {}
+    return stats;
+  } catch (e) {
+    return null;
+  }
 };
 
 export const api = {
@@ -201,38 +285,33 @@ export const api = {
 
   // Subjects
   getSubjects: async () => {
+    const localSubjects = getLocalData("subjects", []);
     try {
       const res = await request("/subjects");
       if (res && res.success) {
-        setLocalData("subjects", res.subjects || []);
-        return res;
+        const merged = mergeCollections(localSubjects, res.subjects || []);
+        setLocalData("subjects", merged);
+        return { success: true, count: merged.length, subjects: merged };
       }
     } catch (e) {
-      const cached = getLocalData("subjects");
-      if (cached) {
-        return { success: true, count: cached.length, subjects: cached };
-      }
+      console.warn("Using local subjects:", e.message);
     }
-    const cached = getLocalData("subjects", []);
-    return { success: true, count: cached.length, subjects: cached };
+    return { success: true, count: localSubjects.length, subjects: localSubjects };
   },
 
   getSubjectById: async (id) => {
+    const allSubjects = getLocalData("subjects", []);
+    const localFound = allSubjects.find((s) => s._id === id || s.id === id);
+
     try {
       const res = await request(`/subjects/${id}`);
-      if (res && res.success) {
+      if (res && res.success && res.subject) {
         setLocalData(`subject_${id}`, res.subject);
         return res;
       }
-    } catch (e) {
-      const cached = getLocalData(`subject_${id}`);
-      if (cached) {
-        return { success: true, subject: cached };
-      }
-    }
-    const allSubjects = getLocalData("subjects", []);
-    const found = allSubjects.find((s) => s._id === id || s.id === id);
-    return { success: true, subject: found || { id, name: "Subject", topics: [] } };
+    } catch (e) {}
+
+    return { success: true, subject: localFound || { id, _id: id, name: "Subject", topics: [] } };
   },
 
   createSubject: async (payload) => {
@@ -255,19 +334,20 @@ export const api = {
     };
 
     const currentSubjects = getLocalData("subjects", []);
-    setLocalData("subjects", [newSubject, ...currentSubjects]);
+    const updated = [newSubject, ...currentSubjects];
+    setLocalData("subjects", updated);
     updateLocalAnalyticsCache();
 
     try {
       const res = await request("/subjects", { method: "POST", body: JSON.stringify(payload) });
       if (res && res.success && res.subject) {
-        const updated = currentSubjects.filter((s) => s._id !== localId && s.id !== localId);
-        setLocalData("subjects", [res.subject, ...updated]);
+        const finalSubjects = updated.map((s) => (s._id === localId || s.id === localId ? res.subject : s));
+        setLocalData("subjects", finalSubjects);
         updateLocalAnalyticsCache();
         return res;
       }
     } catch (e) {
-      console.warn("Using locally created subject:", e.message);
+      console.warn("Subject saved locally:", e.message);
     }
 
     return { success: true, message: "Subject created successfully", subject: newSubject };
@@ -279,6 +359,7 @@ export const api = {
       s._id === id || s.id === id ? { ...s, ...payload } : s
     );
     setLocalData("subjects", updatedSubjects);
+    updateLocalAnalyticsCache();
 
     try {
       const res = await request(`/subjects/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -303,18 +384,17 @@ export const api = {
 
   // Topics
   getTopics: async (subjectId) => {
+    const cacheKey = `topics_${subjectId || "all"}`;
+    const localTopics = getLocalData(cacheKey, []);
     try {
       const res = await request(`/topics${subjectId ? `?subjectId=${subjectId}` : ""}`);
       if (res && res.success) {
-        setLocalData(`topics_${subjectId || "all"}`, res.topics || []);
-        return res;
+        const merged = mergeCollections(localTopics, res.topics || []);
+        setLocalData(cacheKey, merged);
+        return { success: true, topics: merged };
       }
-    } catch (e) {
-      const cached = getLocalData(`topics_${subjectId || "all"}`);
-      if (cached) return { success: true, topics: cached };
-    }
-    const cached = getLocalData(`topics_${subjectId || "all"}`, []);
-    return { success: true, topics: cached };
+    } catch (e) {}
+    return { success: true, topics: localTopics };
   },
 
   createTopic: async (payload) => {
@@ -372,19 +452,17 @@ export const api = {
     if (topicId) params.append("topicId", topicId);
     if (subjectId) params.append("subjectId", subjectId);
     const cacheKey = `subtopics_${topicId || ""}_${subjectId || ""}`;
+    const localSubTopics = getLocalData(cacheKey, []);
 
     try {
       const res = await request(`/subtopics?${params.toString()}`);
       if (res && res.success) {
-        setLocalData(cacheKey, res.subTopics || []);
-        return res;
+        const merged = mergeCollections(localSubTopics, res.subTopics || []);
+        setLocalData(cacheKey, merged);
+        return { success: true, subTopics: merged };
       }
-    } catch (e) {
-      const cached = getLocalData(cacheKey);
-      if (cached) return { success: true, subTopics: cached };
-    }
-    const cached = getLocalData(cacheKey, []);
-    return { success: true, subTopics: cached };
+    } catch (e) {}
+    return { success: true, subTopics: localSubTopics };
   },
 
   createSubTopic: async (payload) => {
@@ -438,68 +516,94 @@ export const api = {
     }
   },
 
-  // Sessions (Timer & Direct Time)
+  // Sessions (Timer & Direct Time) - 100% Permanently Preserved
   createSession: async (payload) => {
     const localId = generateLocalId();
+    const subjects = getLocalData("subjects", []);
+    const subjObj = subjects.find(
+      (s) => s._id === payload.subjectId || s.id === payload.subjectId || s.name === payload.subjectName
+    );
+
     const newSession = {
       _id: localId,
       id: localId,
-      subject: payload.subjectId,
-      subjectName: payload.subjectName,
-      topic: payload.topicId,
-      subTopic: payload.subTopicId,
-      durationMinutes: payload.durationMinutes || 25,
-      date: payload.date || new Date().toISOString(),
-      productivityRating: payload.productivityRating || 5,
+      subject: subjObj
+        ? { _id: subjObj._id || subjObj.id, id: subjObj._id || subjObj.id, name: subjObj.name, color: subjObj.color }
+        : payload.subjectId
+        ? { _id: payload.subjectId, id: payload.subjectId, name: payload.subjectName || "Subject", color: "#6366f1" }
+        : { name: payload.subjectName || "General Study", color: "#6366f1" },
+      subjectName: payload.subjectName || (subjObj ? subjObj.name : "General Study"),
+      topic: payload.topicName ? { title: payload.topicName } : payload.topicId ? { _id: payload.topicId, title: "Topic" } : null,
+      subTopic: payload.subTopicName ? { title: payload.subTopicName } : payload.subTopicId ? { _id: payload.subTopicId, title: "SubTopic" } : null,
+      durationMinutes: Number(payload.durationMinutes) || 25,
+      date: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString(),
+      productivityRating: Number(payload.productivityRating) || 5,
       notes: payload.notes || "",
       sessionType: payload.sessionType || "timer",
       createdAt: new Date().toISOString(),
     };
 
     const currentSessions = getLocalData("sessions", []);
-    setLocalData("sessions", [newSession, ...currentSessions]);
+    const updatedSessions = [newSession, ...currentSessions];
+    setLocalData("sessions", updatedSessions);
+
+    // If subject was custom, ensure subject exists locally
+    if (payload.subjectName && !subjObj) {
+      const newSubj = {
+        _id: generateLocalId(),
+        id: generateLocalId(),
+        name: payload.subjectName.trim(),
+        color: "#6366f1",
+        targetHours: 20,
+        totalMinutes: Number(payload.durationMinutes) || 25,
+        sessionCount: 1,
+        createdAt: new Date().toISOString(),
+      };
+      setLocalData("subjects", [newSubj, ...subjects]);
+    }
+
     updateLocalAnalyticsCache();
 
     try {
       const res = await request("/sessions", { method: "POST", body: JSON.stringify(payload) });
-      if (res && res.success) {
-        if (res.session) {
-          const filtered = currentSessions.filter((s) => s._id !== localId && s.id !== localId);
-          setLocalData("sessions", [res.session, ...filtered]);
-          updateLocalAnalyticsCache();
-        }
+      if (res && res.success && res.session) {
+        const filtered = updatedSessions.filter((s) => s._id !== localId && s.id !== localId);
+        const finalSessions = [res.session, ...filtered];
+        setLocalData("sessions", finalSessions);
+        updateLocalAnalyticsCache();
         return res;
       }
     } catch (e) {
-      console.warn("Using locally created session:", e.message);
+      console.warn("Session saved to permanent local storage:", e.message);
     }
 
-    return { success: true, message: "Study session logged successfully", session: newSession };
+    return { success: true, message: "Study session logged & permanently saved", session: newSession };
   },
 
   getSessions: async (params = {}) => {
     const q = new URLSearchParams(params).toString();
+    const localSessions = getLocalData("sessions", []);
+
     try {
       const res = await request(`/sessions${q ? `?${q}` : ""}`);
-      if (res && res.success) {
-        setLocalData("sessions", res.sessions || []);
-        return res;
+      if (res && res.success && Array.isArray(res.sessions)) {
+        const merged = mergeCollections(localSessions, res.sessions, "_id");
+        setLocalData("sessions", merged);
+        const limit = params.limit ? Number(params.limit) : merged.length;
+        return { success: true, count: merged.length, sessions: merged.slice(0, limit) };
       }
     } catch (e) {
-      const cached = getLocalData("sessions");
-      if (cached) {
-        const limit = params.limit ? Number(params.limit) : cached.length;
-        return { success: true, count: cached.length, sessions: cached.slice(0, limit) };
-      }
+      console.warn("Using permanent local sessions:", e.message);
     }
-    const cached = getLocalData("sessions", []);
-    const limit = params.limit ? Number(params.limit) : cached.length;
-    return { success: true, count: cached.length, sessions: cached.slice(0, limit) };
+
+    const limit = params.limit ? Number(params.limit) : localSessions.length;
+    return { success: true, count: localSessions.length, sessions: localSessions.slice(0, limit) };
   },
 
   deleteSession: async (id) => {
     const currentSessions = getLocalData("sessions", []);
-    setLocalData("sessions", currentSessions.filter((s) => s._id !== id && s.id !== id));
+    const filtered = currentSessions.filter((s) => s._id !== id && s.id !== id);
+    setLocalData("sessions", filtered);
     updateLocalAnalyticsCache();
 
     try {
@@ -510,66 +614,104 @@ export const api = {
     return { success: true, message: "Session deleted successfully" };
   },
 
-  // Tasks
+  // Tasks - 100% Permanently Preserved
   getTasks: async (params = {}) => {
     const q = new URLSearchParams(params).toString();
+    const localTasks = getLocalData("tasks", []);
+
+    let filtered = [...localTasks];
+    if (params.status) filtered = filtered.filter((t) => t.status === params.status);
+    if (params.priority) filtered = filtered.filter((t) => t.priority === params.priority);
+    if (params.subjectId) filtered = filtered.filter((t) => (t.subject?._id || t.subject?.id || t.subject) === params.subjectId);
+
+    const summary = {
+      total: localTasks.length,
+      todo: localTasks.filter((t) => t.status === "todo").length,
+      inProgress: localTasks.filter((t) => t.status === "in_progress").length,
+      completed: localTasks.filter((t) => t.status === "completed").length,
+    };
+
     try {
       const res = await request(`/tasks${q ? `?${q}` : ""}`);
-      if (res && res.success) {
-        setLocalData("tasks", res.tasks || []);
-        if (res.summary) setLocalData("tasks_summary", res.summary);
-        return res;
+      if (res && res.success && Array.isArray(res.tasks)) {
+        const merged = mergeCollections(localTasks, res.tasks, "_id");
+        setLocalData("tasks", merged);
+        
+        let serverFiltered = [...merged];
+        if (params.status) serverFiltered = serverFiltered.filter((t) => t.status === params.status);
+        if (params.priority) serverFiltered = serverFiltered.filter((t) => t.priority === params.priority);
+        if (params.subjectId) serverFiltered = serverFiltered.filter((t) => (t.subject?._id || t.subject?.id || t.subject) === params.subjectId);
+
+        const updatedSummary = {
+          total: merged.length,
+          todo: merged.filter((t) => t.status === "todo").length,
+          inProgress: merged.filter((t) => t.status === "in_progress").length,
+          completed: merged.filter((t) => t.status === "completed").length,
+        };
+
+        return { success: true, count: serverFiltered.length, tasks: serverFiltered, summary: updatedSummary };
       }
     } catch (e) {
-      const cached = getLocalData("tasks");
-      if (cached) {
-        let filtered = [...cached];
-        if (params.status) filtered = filtered.filter((t) => t.status === params.status);
-        if (params.subjectId) filtered = filtered.filter((t) => (t.subject?._id || t.subject?.id || t.subject) === params.subjectId);
-        return { success: true, count: filtered.length, tasks: filtered, summary: getLocalData("tasks_summary", { total: cached.length, todo: cached.filter(t=>t.status==="todo").length, inProgress: cached.filter(t=>t.status==="in_progress").length, completed: cached.filter(t=>t.status==="completed").length }) };
-      }
+      console.warn("Using permanent local tasks:", e.message);
     }
-    const cached = getLocalData("tasks", []);
-    return { success: true, count: cached.length, tasks: cached };
+
+    return { success: true, count: filtered.length, tasks: filtered, summary };
   },
 
   createTask: async (payload) => {
     const localId = generateLocalId();
+    const subjects = getLocalData("subjects", []);
+    const subj = subjects.find((s) => s._id === payload.subjectId || s.id === payload.subjectId);
+
     const newTask = {
       _id: localId,
       id: localId,
       title: payload.title,
       description: payload.description || "",
-      subject: payload.subjectId,
+      subject: subj ? { _id: subj._id || subj.id, id: subj._id || subj.id, name: subj.name, color: subj.color } : payload.subjectId,
       dueDate: payload.dueDate || null,
       priority: payload.priority || "medium",
       status: "todo",
-      estimatedMinutes: payload.estimatedMinutes || 30,
+      estimatedMinutes: payload.estimatedMinutes ? Number(payload.estimatedMinutes) : 30,
       createdAt: new Date().toISOString(),
     };
 
     const currentTasks = getLocalData("tasks", []);
-    setLocalData("tasks", [newTask, ...currentTasks]);
+    const updated = [newTask, ...currentTasks];
+    setLocalData("tasks", updated);
     updateLocalAnalyticsCache();
 
     try {
       const res = await request("/tasks", { method: "POST", body: JSON.stringify(payload) });
       if (res && res.success && res.task) {
-        const filtered = currentTasks.filter((t) => t._id !== localId && t.id !== localId);
-        setLocalData("tasks", [res.task, ...filtered]);
+        const finalTasks = updated.map((t) => (t._id === localId || t.id === localId ? res.task : t));
+        setLocalData("tasks", finalTasks);
         updateLocalAnalyticsCache();
         return res;
       }
     } catch (e) {
-      console.warn("Using locally created task:", e.message);
+      console.warn("Task saved permanently to local storage:", e.message);
     }
 
-    return { success: true, message: "Task created successfully", task: newTask };
+    return { success: true, message: "Task created and permanently saved", task: newTask };
   },
 
   updateTask: async (id, payload) => {
     const currentTasks = getLocalData("tasks", []);
-    const updated = currentTasks.map((t) => (t._id === id || t.id === id ? { ...t, ...payload } : t));
+    const subjects = getLocalData("subjects", []);
+    const subj = payload.subjectId ? subjects.find((s) => s._id === payload.subjectId || s.id === payload.subjectId) : null;
+
+    const updated = currentTasks.map((t) => {
+      if (t._id === id || t.id === id) {
+        return {
+          ...t,
+          ...payload,
+          subject: subj ? { _id: subj._id || subj.id, id: subj._id || subj.id, name: subj.name, color: subj.color } : t.subject,
+        };
+      }
+      return t;
+    });
+
     setLocalData("tasks", updated);
     updateLocalAnalyticsCache();
 
@@ -578,12 +720,17 @@ export const api = {
       if (res && res.success) return res;
     } catch (e) {}
 
-    return { success: true, message: "Task updated successfully" };
+    const savedTask = updated.find((t) => t._id === id || t.id === id);
+    return { success: true, message: "Task updated successfully", task: savedTask };
   },
 
   updateTaskStatus: async (id, status) => {
     const currentTasks = getLocalData("tasks", []);
-    const updated = currentTasks.map((t) => (t._id === id || t.id === id ? { ...t, status } : t));
+    const updated = currentTasks.map((t) =>
+      t._id === id || t.id === id
+        ? { ...t, status, completedAt: status === "completed" ? new Date().toISOString() : null }
+        : t
+    );
     setLocalData("tasks", updated);
     updateLocalAnalyticsCache();
 
@@ -592,7 +739,8 @@ export const api = {
       if (res && res.success) return res;
     } catch (e) {}
 
-    return { success: true, message: "Task status updated" };
+    const savedTask = updated.find((t) => t._id === id || t.id === id);
+    return { success: true, message: "Task status updated", task: savedTask };
   },
 
   deleteTask: async (id) => {
@@ -608,89 +756,202 @@ export const api = {
     return { success: true, message: "Task deleted successfully" };
   },
 
-  // Analytics (Week, Month, Year)
+  // Analytics Overview - Combines server and permanent local sessions
   getAnalyticsOverview: async () => {
     try {
       const res = await request("/analytics/overview");
-      if (res && res.success) {
-        setLocalData("analytics_overview", res);
-        return res;
+      if (res && res.success && res.stats) {
+        // If server returned non-zero stats, use it; otherwise augment with local calculations
+        if (res.stats.totalMinutes > 0) {
+          setLocalData("analytics_overview", res);
+          return res;
+        }
       }
     } catch (e) {
-      const cached = getLocalData("analytics_overview");
-      if (cached) return cached;
+      console.warn("Using local analytics calculation:", e.message);
     }
-    updateLocalAnalyticsCache();
-    return getLocalData("analytics_overview", { success: true, stats: {} });
+
+    const calculatedStats = updateLocalAnalyticsCache();
+    return {
+      success: true,
+      stats: calculatedStats || {
+        todayMinutes: 0,
+        weekMinutes: 0,
+        monthMinutes: 0,
+        yearMinutes: 0,
+        totalMinutes: 0,
+        totalHours: "0.0",
+        totalSessions: 0,
+        avgProductivity: 5,
+        dailyGoalProgress: 0,
+        weeklyGoalProgress: 0,
+        monthlyGoalProgress: 0,
+        yearlyGoalProgress: 0,
+        currentStreak: 1,
+        longestStreak: 1,
+        tasks: { todo: 0, in_progress: 0, completed: 0, total: 0 },
+      },
+    };
   },
 
+  // Analytics Timeseries - 100% Calculated accurately for Week, Month, Year
   getAnalyticsTimeseries: async (period = "week") => {
     try {
       const res = await request(`/analytics/timeseries?period=${period}`);
-      if (res && res.success) {
+      if (res && res.success && res.dataPoints && res.grandTotalMinutes > 0) {
         setLocalData(`analytics_timeseries_${period}`, res);
         return res;
       }
-    } catch (e) {
-      const cached = getLocalData(`analytics_timeseries_${period}`);
-      if (cached) return cached;
-    }
-    // Generate timeseries fallback from sessions
+    } catch (e) {}
+
     const sessions = getLocalData("sessions", []);
+    const subjects = getLocalData("subjects", []);
     const daysCount = period === "week" ? 7 : period === "month" ? 30 : 12;
     const dataPoints = [];
     const now = new Date();
 
+    const subjectBreakdownMap = {};
+    let grandTotalMinutes = 0;
+
+    // Build timeline buckets
     for (let i = daysCount - 1; i >= 0; i--) {
       const d = new Date(now);
       if (period === "year") {
         d.setMonth(d.getMonth() - i);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const monthLabel = d.toLocaleString("default", { month: "short" });
-        dataPoints.push({ label: monthLabel, shortLabel: monthLabel, totalHours: 0, totalMinutes: 0, sessionCount: 0, avgProductivity: 5 });
+
+        let monthMinutes = 0;
+        let sCount = 0;
+        let pSum = 0;
+
+        sessions.forEach((s) => {
+          const sd = new Date(s.date || s.createdAt);
+          const sKey = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, "0")}`;
+          if (sKey === monthKey) {
+            const mins = Number(s.durationMinutes) || 0;
+            monthMinutes += mins;
+            sCount += 1;
+            pSum += Number(s.productivityRating) || 5;
+          }
+        });
+
+        grandTotalMinutes += monthMinutes;
+        dataPoints.push({
+          label: monthLabel,
+          shortLabel: monthLabel,
+          totalHours: Number((monthMinutes / 60).toFixed(1)),
+          totalMinutes: monthMinutes,
+          sessionCount: sCount,
+          avgProductivity: sCount > 0 ? Number((pSum / sCount).toFixed(1)) : 5,
+        });
       } else {
         d.setDate(d.getDate() - i);
+        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const dayLabel = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
         const shortLabel = d.toLocaleDateString(undefined, { weekday: "short" });
-        dataPoints.push({ label: dayLabel, shortLabel, dateStr: d.toISOString().split("T")[0], totalHours: 0, totalMinutes: 0, sessionCount: 0, avgProductivity: 5 });
+
+        let dayMinutes = 0;
+        let sCount = 0;
+        let pSum = 0;
+
+        sessions.forEach((s) => {
+          const sd = new Date(s.date || s.createdAt);
+          const sKey = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, "0")}-${String(sd.getDate()).padStart(2, "0")}`;
+          if (sKey === dayKey) {
+            const mins = Number(s.durationMinutes) || 0;
+            dayMinutes += mins;
+            sCount += 1;
+            pSum += Number(s.productivityRating) || 5;
+          }
+        });
+
+        grandTotalMinutes += dayMinutes;
+        dataPoints.push({
+          label: dayLabel,
+          shortLabel,
+          dateStr: dayKey,
+          totalHours: Number((dayMinutes / 60).toFixed(1)),
+          totalMinutes: dayMinutes,
+          sessionCount: sCount,
+          avgProductivity: sCount > 0 ? Number((pSum / sCount).toFixed(1)) : 5,
+        });
       }
     }
+
+    // Aggregate subject distribution
+    sessions.forEach((s) => {
+      const mins = Number(s.durationMinutes) || 0;
+      const sName = s.subject?.name || s.subjectName || "General Study";
+      const sColor = s.subject?.color || "#6366f1";
+      if (!subjectBreakdownMap[sName]) {
+        subjectBreakdownMap[sName] = { name: sName, color: sColor, totalMinutes: 0 };
+      }
+      subjectBreakdownMap[sName].totalMinutes += mins;
+    });
+
+    const subjectBreakdown = Object.values(subjectBreakdownMap).map((sb) => ({
+      ...sb,
+      totalHours: Number((sb.totalMinutes / 60).toFixed(1)),
+      percentage: grandTotalMinutes > 0 ? Math.round((sb.totalMinutes / grandTotalMinutes) * 100) : 0,
+    }));
 
     return {
       success: true,
       period,
-      grandTotalMinutes: sessions.reduce((a, s) => a + (s.durationMinutes || 0), 0),
-      grandTotalHours: (sessions.reduce((a, s) => a + (s.durationMinutes || 0), 0) / 60).toFixed(1),
+      grandTotalMinutes,
+      grandTotalHours: Number((grandTotalMinutes / 60).toFixed(1)),
       dataPoints,
-      subjectBreakdown: [],
+      subjectBreakdown,
     };
   },
 
   getSubjectBreakdown: async () => {
     try {
       const res = await request("/analytics/subject-breakdown");
-      if (res && res.success) {
+      if (res && res.success && Array.isArray(res.subjects) && res.subjects.length > 0) {
         setLocalData("subject_breakdown", res);
         return res;
       }
-    } catch (e) {
-      const cached = getLocalData("subject_breakdown");
-      if (cached) return cached;
-    }
+    } catch (e) {}
+
     const subjects = getLocalData("subjects", []);
-    return {
-      success: true,
-      subjects: subjects.map((s) => ({
+    const sessions = getLocalData("sessions", []);
+
+    const result = subjects.map((s) => {
+      const sId = (s._id || s.id).toString();
+      let totalMins = 0;
+      let sessionCount = 0;
+
+      sessions.forEach((sess) => {
+        const sessSubjId = (sess.subject?._id || sess.subject?.id || sess.subject || "").toString();
+        const sessSubjName = (sess.subject?.name || sess.subjectName || "").toLowerCase();
+        if (sessSubjId === sId || (s.name && sessSubjName === s.name.toLowerCase())) {
+          totalMins += Number(sess.durationMinutes) || 0;
+          sessionCount += 1;
+        }
+      });
+
+      const targetMins = (s.targetHours || 20) * 60;
+      const progressPercentage = targetMins > 0 ? Math.min(100, Math.round((totalMins / targetMins) * 100)) : 0;
+
+      return {
         id: s._id || s.id,
         _id: s._id || s.id,
         name: s.name,
         color: s.color || "#6366f1",
-        totalMinutes: s.totalMinutes || 0,
-        totalHours: ((s.totalMinutes || 0) / 60).toFixed(1),
-        progressPercentage: s.progressPercentage || 0,
+        targetHours: s.targetHours || 20,
+        totalMinutes: totalMins,
+        totalHours: Number((totalMins / 60).toFixed(1)),
+        progressPercentage,
+        topicCount: s.topicCount || 0,
         subTopicCount: s.subTopicCount || 0,
         completedSubTopics: s.completedSubTopics || 0,
-      })),
-    };
+        sessionCount,
+      };
+    });
+
+    return { success: true, subjects: result };
   },
 
   // Universal Course Templates & Demo Loader
