@@ -359,8 +359,16 @@ exports.getMe = async (req, res) => {
     }
 
     const db = readDB();
-    const user = db.users.find((u) => u._id === req.user._id || u.id === req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    let user = db.users.find((u) => u._id === req.user._id || u.id === req.user._id || u._id === req.user.id || u.id === req.user.id);
+    if (!user) {
+      if (req.user) {
+        user = req.user;
+        db.users.push(user);
+        writeDB(db);
+      } else {
+        return res.status(404).json({ message: "User not found" });
+      }
+    }
 
     const { password, ...safeUser } = user;
     res.json({ success: true, user: safeUser });

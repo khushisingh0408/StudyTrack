@@ -13,6 +13,7 @@ exports.getOverview = async (req, res) => {
     const userId = req.user._id?.toString() || req.user.id?.toString();
 
     const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -63,7 +64,12 @@ exports.getOverview = async (req, res) => {
         detailedLogMinutes += mins;
       }
 
-      if (d >= startOfToday) todayMinutes += mins;
+      const sDateStr = typeof s.date === "string" && s.date.includes("T") ? s.date.split("T")[0] : null;
+      const sLocalStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      if (d >= startOfToday || sDateStr === todayStr || sLocalStr === todayStr) {
+        todayMinutes += mins;
+      }
       if (d >= startOfWeek) weekMinutes += mins;
       if (d >= startOfMonth) monthMinutes += mins;
       if (d >= startOfYear) yearMinutes += mins;
@@ -224,9 +230,10 @@ exports.getTimeseries = async (req, res) => {
       const y = sDate.getFullYear();
       const m = String(sDate.getMonth() + 1).padStart(2, "0");
       const dayNum = String(sDate.getDate()).padStart(2, "0");
-      const dateStr = period === "year" ? `${y}-${m}` : `${y}-${m}-${dayNum}`;
+      const localDateStr = period === "year" ? `${y}-${m}` : `${y}-${m}-${dayNum}`;
+      const isoDateStr = typeof s.date === "string" && s.date.includes("T") ? (period === "year" ? s.date.substring(0, 7) : s.date.split("T")[0]) : null;
 
-      const point = dataPoints.find((p) => p.dateStr === dateStr);
+      const point = dataPoints.find((p) => p.dateStr === localDateStr || (isoDateStr && p.dateStr === isoDateStr));
       if (point) {
         point.totalMinutes += s.durationMinutes || 0;
         point.sessionCount += 1;

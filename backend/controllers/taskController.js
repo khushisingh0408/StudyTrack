@@ -48,9 +48,11 @@ exports.getTasks = async (req, res) => {
       const subTopic = db.subtopics.find((st) => (st._id || st.id).toString() === (t.subTopic || "").toString());
       return {
         ...t,
-        subject: subject ? { name: subject.name, color: subject.color, icon: subject.icon } : null,
-        topic: topic ? { title: topic.title } : null,
-        subTopic: subTopic ? { title: subTopic.title } : null,
+        subject: subject
+          ? { _id: subject._id || subject.id, id: subject._id || subject.id, name: subject.name, color: subject.color, icon: subject.icon }
+          : null,
+        topic: topic ? { _id: topic._id || topic.id, id: topic._id || topic.id, title: topic.title } : null,
+        subTopic: subTopic ? { _id: subTopic._id || subTopic.id, id: subTopic._id || subTopic.id, title: subTopic.title } : null,
       };
     });
 
@@ -132,9 +134,11 @@ exports.createTask = async (req, res) => {
       message: "Task created successfully",
       task: {
         ...newTask,
-        subject: subject ? { name: subject.name, color: subject.color, icon: subject.icon } : null,
-        topic: topic ? { title: topic.title } : null,
-        subTopic: subTopic ? { title: subTopic.title } : null,
+        subject: subject
+          ? { _id: subject._id || subject.id, id: subject._id || subject.id, name: subject.name, color: subject.color, icon: subject.icon }
+          : null,
+        topic: topic ? { _id: topic._id || topic.id, id: topic._id || topic.id, title: topic.title } : null,
+        subTopic: subTopic ? { _id: subTopic._id || subTopic.id, id: subTopic._id || subTopic.id, title: subTopic.title } : null,
       },
     });
   } catch (error) {
@@ -207,9 +211,11 @@ exports.updateTask = async (req, res) => {
       message: "Task updated successfully",
       task: {
         ...task,
-        subject: subject ? { name: subject.name, color: subject.color, icon: subject.icon } : null,
-        topic: topic ? { title: topic.title } : null,
-        subTopic: subTopic ? { title: subTopic.title } : null,
+        subject: subject
+          ? { _id: subject._id || subject.id, id: subject._id || subject.id, name: subject.name, color: subject.color, icon: subject.icon }
+          : null,
+        topic: topic ? { _id: topic._id || topic.id, id: topic._id || topic.id, title: topic.title } : null,
+        subTopic: subTopic ? { _id: subTopic._id || subTopic.id, id: subTopic._id || subTopic.id, title: subTopic.title } : null,
       },
     });
   } catch (error) {
@@ -261,9 +267,11 @@ exports.updateTaskStatus = async (req, res) => {
       message: "Task status updated",
       task: {
         ...task,
-        subject: subject ? { name: subject.name, color: subject.color, icon: subject.icon } : null,
-        topic: topic ? { title: topic.title } : null,
-        subTopic: subTopic ? { title: subTopic.title } : null,
+        subject: subject
+          ? { _id: subject._id || subject.id, id: subject._id || subject.id, name: subject.name, color: subject.color, icon: subject.icon }
+          : null,
+        topic: topic ? { _id: topic._id || topic.id, id: topic._id || topic.id, title: topic.title } : null,
+        subTopic: subTopic ? { _id: subTopic._id || subTopic.id, id: subTopic._id || subTopic.id, title: subTopic.title } : null,
       },
     });
   } catch (error) {

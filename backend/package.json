@@ -5,8 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "nodemon --ignore data/ server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "nodemonConfig": {
+    "watch": ["server.js", "controllers", "routes", "models", "middleware", "config"],
+    "ignore": ["data/*", "data/**", "data", "*.json"]
   },
   "keywords": [],
   "author": "",

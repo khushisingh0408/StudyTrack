@@ -71,30 +71,30 @@ const PORT = process.env.PORT || 5000;
 let dbPromise = null;
 const initDB = async () => {
   if (!dbPromise) {
-    dbPromise = connectDB().then(async () => {
-      await seedDemoUser();
-    });
+    dbPromise = (async () => {
+      try {
+        await connectDB();
+        await seedDemoUser();
+      } catch (err) {
+        console.warn("DB initialization warning:", err.message);
+      }
+    })();
   }
   return dbPromise;
 };
 
-// Ensure DB is initialized for serverless requests
-app.use(async (req, res, next) => {
-  try {
-    await initDB();
-  } catch (err) {
-    console.error("DB init error in request:", err);
-  }
-  next();
-});
+// Ensure DB is initialized for serverless requests (Vercel)
+if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  initDB();
+}
 
 // If running directly (e.g. locally or on standalone server)
 if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  initDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`StudyTrack Server running on port ${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`StudyTrack Server running on port ${PORT}`);
   });
+  // Initialize DB in background without blocking server responsiveness
+  initDB();
 }
 
 module.exports = app;

@@ -12,7 +12,7 @@ const TMP_BACKUP_FILE = path.join("/tmp", "studytrack_db.backup.json");
 const DB_FILE = isServerless ? TMP_DB_FILE : ORIGINAL_DB_FILE;
 const BACKUP_FILE = isServerless ? TMP_BACKUP_FILE : ORIGINAL_BACKUP_FILE;
 
-// Memory cache fallback in case disk writes are blocked
+// Memory cache
 let memoryDB = null;
 
 // Ensure data directory and seed data exists
@@ -24,15 +24,21 @@ const ensureDataDir = () => {
     }
 
     if (!fs.existsSync(DB_FILE)) {
-      // If we are in serverless, try to seed from ORIGINAL_DB_FILE
+      // If in serverless, try to seed from ORIGINAL_DB_FILE
       if (isServerless && fs.existsSync(ORIGINAL_DB_FILE)) {
         try {
           const originalContent = fs.readFileSync(ORIGINAL_DB_FILE, "utf-8");
           fs.writeFileSync(DB_FILE, originalContent, "utf-8");
           return;
-        } catch (e) {
-          // Fallback to initial seed
-        }
+        } catch (e) {}
+      }
+
+      if (fs.existsSync(BACKUP_FILE)) {
+        try {
+          const backupContent = fs.readFileSync(BACKUP_FILE, "utf-8");
+          fs.writeFileSync(DB_FILE, backupContent, "utf-8");
+          return;
+        } catch (e) {}
       }
 
       const initialData = JSON.stringify(
@@ -50,65 +56,81 @@ const ensureDataDir = () => {
       fs.writeFileSync(DB_FILE, initialData, "utf-8");
     }
   } catch (e) {
-    // If filesystem write fails, initialize memoryDB
-    if (!memoryDB) {
-      if (fs.existsSync(ORIGINAL_DB_FILE)) {
-        try {
-          memoryDB = JSON.parse(fs.readFileSync(ORIGINAL_DB_FILE, "utf-8"));
-        } catch (err) {
-          memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
-        }
-      } else {
-        memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
-      }
-    }
+    console.error("ensureDataDir error:", e.message);
   }
 };
 
 ensureDataDir();
 
 const readDB = () => {
-  if (memoryDB) {
-    return memoryDB;
-  }
-
   try {
     ensureDataDir();
-    const data = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(data);
-  } catch (e) {
+    if (fs.existsSync(DB_FILE)) {
+      const data = fs.readFileSync(DB_FILE, "utf-8");
+      if (data && data.trim()) {
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === "object" && Array.isArray(parsed.users)) {
+          memoryDB = parsed;
+          return memoryDB;
+        }
+      }
+    }
+  } catch (err) {
+    // If reading primary DB_FILE failed or was locked, try reading BACKUP_FILE
     try {
       if (fs.existsSync(BACKUP_FILE)) {
         const backupData = fs.readFileSync(BACKUP_FILE, "utf-8");
-        const parsed = JSON.parse(backupData);
-        try {
-          fs.writeFileSync(DB_FILE, backupData, "utf-8");
-        } catch (we) {}
-        return parsed;
+        if (backupData && backupData.trim()) {
+          const parsed = JSON.parse(backupData);
+          if (parsed && typeof parsed === "object" && Array.isArray(parsed.users)) {
+            memoryDB = parsed;
+            try {
+              fs.writeFileSync(DB_FILE, backupData, "utf-8");
+            } catch (we) {}
+            return memoryDB;
+          }
+        }
       }
-      if (fs.existsSync(ORIGINAL_DB_FILE)) {
-        return JSON.parse(fs.readFileSync(ORIGINAL_DB_FILE, "utf-8"));
-      }
-    } catch (bkErr) {}
+    } catch (bErr) {}
+  }
 
-    if (!memoryDB) {
-      memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
-    }
+  // If memoryDB already has data, return it instead of wiping
+  if (memoryDB && Array.isArray(memoryDB.users) && memoryDB.users.length > 0) {
     return memoryDB;
   }
+
+  // Fallback to original DB file if in serverless
+  try {
+    if (fs.existsSync(ORIGINAL_DB_FILE)) {
+      const origData = fs.readFileSync(ORIGINAL_DB_FILE, "utf-8");
+      const parsed = JSON.parse(origData);
+      if (parsed && Array.isArray(parsed.users)) {
+        memoryDB = parsed;
+        return memoryDB;
+      }
+    }
+  } catch (origErr) {}
+
+  if (!memoryDB) {
+    memoryDB = { users: [], subjects: [], topics: [], subtopics: [], sessions: [], tasks: [] };
+  }
+  return memoryDB;
 };
 
 const writeDB = (data) => {
+  if (!data || typeof data !== "object") return;
   memoryDB = data;
   try {
     ensureDataDir();
     const jsonStr = JSON.stringify(data, null, 2);
+    // Write backup first
     try {
       fs.writeFileSync(BACKUP_FILE, jsonStr, "utf-8");
     } catch (bErr) {}
+    // Write main file
     fs.writeFileSync(DB_FILE, jsonStr, "utf-8");
   } catch (err) {
-    // Disk write error in serverless - handled by memoryDB cache
+    console.error("writeDB error:", err.message);
   }
 };
 

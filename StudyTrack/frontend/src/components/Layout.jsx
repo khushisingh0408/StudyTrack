@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
+import { MobileNav } from "./MobileNav";
 import { ProfileModal } from "./ProfileModal";
 
 export const Layout = () => {
@@ -16,6 +17,9 @@ export const Layout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Modern Mobile Bottom Navigation */}
+      <MobileNav onOpenProfile={() => setIsProfileOpen(true)} />
 
       <ProfileModal
         isOpen={isProfileOpen}

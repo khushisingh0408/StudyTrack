@@ -528,7 +528,7 @@ export const Analytics = () => {
       </div>
 
       {/* Main Charts Grid: Bar Chart & Doughnut Chart */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "24px" }}>
+      <div className="responsive-2col-charts">
         {/* Study Duration Bar Chart */}
         <div className="glass-panel" style={{ padding: "24px", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>

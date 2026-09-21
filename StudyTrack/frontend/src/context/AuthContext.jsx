@@ -4,16 +4,23 @@ import { api } from "../services/api";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem("studytrack_user");
+      return u ? JSON.parse(u) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [token, setToken] = useState(localStorage.getItem("studytrack_token") || null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem("studytrack_token");
       const storedUser = localStorage.getItem("studytrack_user");
 
-      if (storedUser) {
+      if (storedUser && !user) {
         try {
           setUser(JSON.parse(storedUser));
         } catch (e) {}
@@ -22,16 +29,14 @@ export const AuthProvider = ({ children }) => {
       if (storedToken) {
         try {
           const res = await api.getMe();
-          if (res.success && res.user) {
+          if (res && res.success && res.user) {
             setUser(res.user);
             localStorage.setItem("studytrack_user", JSON.stringify(res.user));
           }
         } catch (err) {
           console.warn("Could not sync profile from server, using local session:", err.message);
-          // Keep the stored user session active instead of logging out!
         }
       }
-      setLoading(false);
     };
 
     initAuth();

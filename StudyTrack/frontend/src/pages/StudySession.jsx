@@ -144,6 +144,94 @@ export const StudySession = () => {
     loadSubTopics();
   }, [selectedTopicId, selectedSubjectId, isCustomTopic]);
 
+  // Load saved timer state on mount
+  useEffect(() => {
+    try {
+      const savedTimer = localStorage.getItem("studytrack_active_timer");
+      if (savedTimer) {
+        const data = JSON.parse(savedTimer);
+        if (data.timerType) setTimerType(data.timerType);
+        if (data.customMinutes) {
+          setCustomMinutes(data.customMinutes);
+          setCustomInputVal(String(data.customMinutes));
+        }
+        if (data.selectedSubjectId) setSelectedSubjectId(data.selectedSubjectId);
+        if (data.customSubjectName) setCustomSubjectName(data.customSubjectName);
+        if (data.isCustomSubject !== undefined) setIsCustomSubject(data.isCustomSubject);
+        if (data.selectedTopicId) setSelectedTopicId(data.selectedTopicId);
+        if (data.customTopicName) setCustomTopicName(data.customTopicName);
+        if (data.isCustomTopic !== undefined) setIsCustomTopic(data.isCustomTopic);
+        if (data.selectedSubTopicId) setSelectedSubTopicId(data.selectedSubTopicId);
+        if (data.customSubTopicName) setCustomSubTopicName(data.customSubTopicName);
+        if (data.isCustomSubTopic !== undefined) setIsCustomSubTopic(data.isCustomSubTopic);
+        if (data.timerNotes) setTimerNotes(data.timerNotes);
+
+        if (data.isRunning && data.lastTimestamp) {
+          const elapsed = Math.floor((Date.now() - data.lastTimestamp) / 1000);
+          if (data.timerType === "stopwatch") {
+            setStopwatchSeconds((data.stopwatchSeconds || 0) + elapsed);
+          } else {
+            const rem = Math.max(0, (data.secondsLeft || 0) - elapsed);
+            setSecondsLeft(rem);
+            setTotalTimerSeconds(data.totalTimerSeconds || (data.customMinutes * 60));
+          }
+          setIsRunning(true);
+        } else {
+          if (data.stopwatchSeconds) setStopwatchSeconds(data.stopwatchSeconds);
+          if (data.secondsLeft) setSecondsLeft(data.secondsLeft);
+          if (data.totalTimerSeconds) setTotalTimerSeconds(data.totalTimerSeconds);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Sync active timer state to localStorage
+  useEffect(() => {
+    if (stopwatchSeconds > 0 || isRunning || timerNotes || customSubjectName || customTopicName) {
+      try {
+        localStorage.setItem(
+          "studytrack_active_timer",
+          JSON.stringify({
+            timerType,
+            customMinutes,
+            isRunning,
+            lastTimestamp: Date.now(),
+            stopwatchSeconds,
+            secondsLeft,
+            totalTimerSeconds,
+            selectedSubjectId,
+            customSubjectName,
+            isCustomSubject,
+            selectedTopicId,
+            customTopicName,
+            isCustomTopic,
+            selectedSubTopicId,
+            customSubTopicName,
+            isCustomSubTopic,
+            timerNotes,
+          })
+        );
+      } catch (e) {}
+    }
+  }, [
+    timerType,
+    customMinutes,
+    isRunning,
+    stopwatchSeconds,
+    secondsLeft,
+    totalTimerSeconds,
+    selectedSubjectId,
+    customSubjectName,
+    isCustomSubject,
+    selectedTopicId,
+    customTopicName,
+    isCustomTopic,
+    selectedSubTopicId,
+    customSubTopicName,
+    isCustomSubTopic,
+    timerNotes,
+  ]);
+
   // Handle Timer ticking
   useEffect(() => {
     if (isRunning) {
@@ -208,6 +296,7 @@ export const StudySession = () => {
 
   const handleResetTimer = () => {
     setIsRunning(false);
+    localStorage.removeItem("studytrack_active_timer");
     if (timerType === "stopwatch") {
       setStopwatchSeconds(0);
     } else {
@@ -613,7 +702,7 @@ export const StudySession = () => {
 
       {/* --- Tab 1: Interactive Timer / Stopwatch --- */}
       {activeTab === "timer" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "24px" }}>
+        <div className="responsive-2col">
           {/* Left: Timer Circle & Controls */}
           <div
             className="glass-panel"

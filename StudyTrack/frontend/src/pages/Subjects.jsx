@@ -412,16 +412,18 @@ export const Subjects = () => {
                 <div
                   onClick={() => toggleSubject(sId)}
                   style={{
-                    padding: "20px 24px",
+                    padding: "16px 20px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "14px",
                     cursor: "pointer",
                     background: isSubjExpanded ? "rgba(255,255,255,0.02)" : "transparent",
                     borderBottom: isSubjExpanded ? "1px solid var(--border-subtle)" : "none",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: "200px" }}>
                     <div
                       style={{
                         color: "var(--text-secondary)",

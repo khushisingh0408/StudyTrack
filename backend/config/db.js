@@ -8,18 +8,18 @@ const connectDB = async () => {
       if (mongoose.connection.readyState === 1) return;
       console.log("Connecting to MongoDB Atlas...");
       await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 4000,
+        serverSelectionTimeoutMS: 2500,
       });
       console.log("MongoDB Connected Successfully");
       return;
     } catch (err) {
-      console.warn("MongoDB Atlas connection error:", err.message);
+      console.warn("MongoDB Atlas unreachable (using high-speed local store):", err.message);
     }
   }
 
   // If in Serverless (Vercel) and no mongoUri is supplied, use the built-in fast local/memory store directly
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    console.log("Serverless mode without MongoDB URI: Using fast localStore database.");
+    console.log("Serverless mode: Using fast localStore database.");
     return;
   }
 
@@ -27,12 +27,13 @@ const connectDB = async () => {
   try {
     if (mongoose.connection.readyState === 1) return;
     await mongoose.connect("mongodb://127.0.0.1:27017/studytrack", {
-      serverSelectionTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 1000,
     });
     console.log("Connected to Local MongoDB (127.0.0.1:27017)");
   } catch (localErr) {
-    console.log("Local MongoDB not detected. Operating in localStore DB mode.");
+    console.log("Local MongoDB not running. Operating in localStore JSON DB mode.");
   }
 };
 
 module.exports = connectDB;
+

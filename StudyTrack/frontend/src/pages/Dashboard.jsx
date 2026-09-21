@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { StatCard } from "../components/StatCard";
-import confetti from "canvas-confetti";
 import {
   Timer,
   Clock,
@@ -16,14 +15,8 @@ import {
   TrendingUp,
   Award,
   Calendar,
-  Layers,
   Star,
   Sparkles,
-  Target,
-  Zap,
-  GraduationCap,
-  Download,
-  FileCheck,
 } from "lucide-react";
 
 export const Dashboard = () => {
@@ -36,7 +29,6 @@ export const Dashboard = () => {
   const [subjectBreakdown, setSubjectBreakdown] = useState([]);
   const [expandedSubjectId, setExpandedSubjectId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [demoLoading, setDemoLoading] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -70,21 +62,6 @@ export const Dashboard = () => {
     }
   };
 
-  const handleLoadDemo = async () => {
-    setDemoLoading(true);
-    try {
-      const res = await api.loadDemoData();
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-      await fetchDashboardData();
-      await refreshUserStats();
-      alert(res.message || "Demo data loaded successfully!");
-    } catch (e) {
-      alert("Failed to load demo data: " + e.message);
-    } finally {
-      setDemoLoading(false);
-    }
-  };
-
   const formatMinutes = (mins) => {
     if (!mins || mins === 0) return "0m";
     const h = Math.floor(mins / 60);
@@ -93,21 +70,6 @@ export const Dashboard = () => {
     if (m === 0) return `${h}h`;
     return `${h}h ${m}m`;
   };
-
-  // Exam Countdown calculation
-  const getExamCountdown = () => {
-    if (!user?.targetExamDate) {
-      return { days: 85, examName: user?.targetExam || "Target Competitive Exam" };
-    }
-    const diffTime = new Date(user.targetExamDate) - new Date();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return {
-      days: Math.max(1, diffDays),
-      examName: user.targetExam || "Final Exams",
-    };
-  };
-
-  const countdown = getExamCountdown();
 
   const motivationalQuotes = {
     medical: "The art of medicine was to be learned only by its practice and by its service. Every case study counts.",
@@ -122,72 +84,6 @@ export const Dashboard = () => {
 
   return (
     <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
-      {/* Top Banner: Live Exam Countdown & Academic Stream Bar */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: "20px 24px",
-          background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(99, 102, 241, 0.12))",
-          border: "1px solid rgba(245, 158, 11, 0.3)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div
-            style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "14px",
-              background: "rgba(245, 158, 11, 0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fbbf24",
-              border: "1px solid rgba(245, 158, 11, 0.4)",
-            }}
-          >
-            <Target size={24} className="flame-glow" />
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span className="badge badge-amber" style={{ fontSize: "0.7rem", padding: "2px 8px" }}>
-                Target Goal
-              </span>
-              <span style={{ fontSize: "0.95rem", fontWeight: 700, color: "#ffffff" }}>
-                {countdown.examName}
-              </span>
-            </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-              ⏳ <strong>{countdown.days} Days Remaining</strong> until your milestone exam
-            </div>
-          </div>
-        </div>
-
-        {/* Demo Data Quick Load Button */}
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <button
-            onClick={handleLoadDemo}
-            className="btn-secondary"
-            style={{
-              padding: "8px 14px",
-              fontSize: "0.813rem",
-              background: "rgba(99, 102, 241, 0.15)",
-              borderColor: "rgba(99, 102, 241, 0.4)",
-              color: "#a5b4fc",
-            }}
-            disabled={demoLoading}
-            title="Pre-populate 14-day study history and tasks for instant demo"
-          >
-            <Zap size={15} />
-            <span>{demoLoading ? "Loading Demo..." : "⚡ Fill Realistic Demo Data"}</span>
-          </button>
-        </div>
-      </div>
-
       {/* Main Focus Goal Banner */}
       <div
         className="glass-panel"
@@ -297,7 +193,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Main 2-Column Section: Subject Progress & Recent Activity / Tasks */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: "24px" }}>
+      <div className="responsive-2col">
         {/* Left Column: Subjects & Syllabus Progress */}
         <div className="glass-panel" style={{ padding: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
